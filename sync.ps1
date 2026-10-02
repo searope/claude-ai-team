@@ -5,7 +5,7 @@ Copies the AI team between this repository and Claude Code's own folders.
   ./sync.ps1 save      Claude Code's folders -> this repository
   ./sync.ps1 install   this repository -> Claude Code's folders
 
-Only the nine skills and two agent types named below are touched. Nothing else
+Only the skills and agent types named in team.json are touched. Nothing else
 in ~/.claude (other skills, credentials, transcripts) is read or copied.
 #>
 param(
@@ -15,9 +15,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Skills = 'copywriter', 'devops-engineer', 'product-manager', 'security-reviewer', 'software-engineer',
-          'system-architect', 'team-lead', 'test-engineer', 'ui-designer'
-$Agents = 'ai-team-auditor.md', 'ai-team-author.md'
+# The team roster. The write guard in .claude/hooks/team-scope.ps1 reads the same file.
+$Team = Get-Content (Join-Path $PSScriptRoot 'team.json') -Raw | ConvertFrom-Json
+$Skills = @($Team.skills)
+$Agents = @($Team.agents)
 
 # The team's files under a root, as relative paths like "skills/team-lead/SKILL.md".
 function Get-TeamFiles([string]$Root) {

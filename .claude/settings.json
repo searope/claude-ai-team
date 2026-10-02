@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(~/.claude/skills/synced/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/team-scope.ps1\"",
+            "timeout": 15,
+            "statusMessage": "Checking AI team scope"
+          }
+        ]
+      }
+    ]
+  }
+}

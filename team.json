@@ -1,0 +1,18 @@
+{
+  "skills": [
+    "copywriter",
+    "devops-engineer",
+    "product-manager",
+    "security-reviewer",
+    "software-engineer",
+    "system-architect",
+    "team-lead",
+    "test-engineer",
+    "ui-designer"
+  ],
+  "agents": [
+    "ai-team-auditor.md",
+    "ai-team-author.md",
+    "ai-team-builder.md"
+  ]
+}

@@ -14,7 +14,7 @@ allowed-tools:
   - Skill
   - "Edit(.ai-team/**)"
 metadata:
-  version: "6.3"
+  version: "7.0"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 
@@ -54,6 +54,8 @@ Arguments: $ARGUMENTS
 - **Rejected list:** `.ai-team/state/rejected-features.md` (only you write it)
 - **Handoffs:** `.ai-team/scratchpad/<feature-slug>-<role>-context.md` (you read
   them; you write only the `security` one, verbatim from the reviewer's report)
+- **Change record:** `.ai-team/scratchpad/<feature-slug>-changes.md` (only you
+  write it, before Stage 8)
 
 ---
 
@@ -61,8 +63,8 @@ Arguments: $ARGUMENTS
 1. **NO PRODUCTION WORK:** Never edit source, tests, infra, specs, copy, UI
    specs or ADRs. Route the work to its owner.
 2. **WRITE ISOLATION:** Write only the ledger, the rejected list, the security
-   handoff, and, during setup, the project copy of the pipeline rules and its
-   import line.
+   handoff, the change record, and, during setup, the project copy of the
+   pipeline rules and its import line.
 3. **NEVER OVERWRITE THE PROJECT COPY:** It may hold project-specific paths.
    Report a version mismatch; do not fix it yourself.
 4. **SHELL FOR GIT HOUSEKEEPING ONLY:** Work with `Read`, `Glob` and `Grep`. Do
@@ -74,7 +76,7 @@ Arguments: $ARGUMENTS
    the setup commits, and a checkpoint commit the user agreed to. Never commit
    the work of a feature in development. Never push, merge, reset, or rewrite
    history.
-6. **PROJECT OVERRIDES COME FIRST:** Section 8 (`Project Overrides`) of the
+6. **PROJECT OVERRIDES COME FIRST:** The `Project Overrides` section of the
    project copy may set the project's own `Git Workflow` or `Fast Path`. Where
    it does, follow it in place of the defaults in this skill: the clean-start
    check and the commits of Phase 0, guardrail 5, Stage 9, and the mechanics
@@ -114,7 +116,7 @@ Arguments: $ARGUMENTS
      differ, continue with the project copy, note it in `History`, and say so
      in one line in your next Report (Phase 4), so it is not lost when another
      agent speaks last.
-   - **Overrides:** read section 8 of the project copy now. If it sets a
+   - **Overrides:** read `Project Overrides` in the project copy now. If it sets a
      `Git Workflow`, apply it from here on, including in place of the setup
      commits above and of step 4 below.
 3. Resolve the `<feature-slug>` (see Invocation).
@@ -153,12 +155,15 @@ is the first one that is neither `DONE` nor `SKIPPED`.
   (0 when you create the ledger). Ignore handoffs from older rounds. A stage
   already `DONE` in the ledger stays `DONE` until a backward route resets it.
 - **Backward routes:** on `ESCALATE`, `DEFECTS` or `BLOCK` in the current round,
-  apply `Defect Routing & Escalation`: add the items to `Active Defects`,
-  increment `Round` and the matching counter, and set the stage you route to
-  and every later non-`SKIPPED` stage to `PENDING`. If you route to Stages
-  1-4, also set `Design Gate` back to `PENDING`.
-- **Stop conditions:** a loop cap is exceeded, or a handoff or blocker names
-  `user` as its owner. Set `BLOCKED` and ask the user. If the user tells you to
+  apply `Defect Routing and Escalation`. A handoff or blocker names the area
+  it is blocked on, not a skill: look the area up in the `Write Isolation`
+  table to find its owner, and route to the earliest stage among the owners
+  named. Add the items to `Active Defects`, increment `Round` and the matching
+  counter, and set the stage you route to and every later non-`SKIPPED` stage
+  to `PENDING`. If you route to Stages 1-4, also set `Design Gate` back to
+  `PENDING`.
+- **Stop conditions:** a loop cap is exceeded, or a handoff or blocker is
+  blocked on `user`. Set `BLOCKED` and ask the user. If the user tells you to
   continue after a cap, set that counter back to 0 and note it in `History`.
 
 ### Phase 2: State Ledger Checkpointing
@@ -183,7 +188,7 @@ When you create it, record `Start Point` from `git rev-parse HEAD`.
 | ... one row per stage of the Routing Table ... | | |
 
 ## Active Defects
-- <test | security | escalation> -> <owner skill>: <one line> (<handoff file>)
+- <test | security | escalation> -> <area> (<owner skill>): <one line> (<handoff file>)
 
 ## Fast Path
 <only on a project fast path: the request, and the files that may change>
@@ -197,19 +202,26 @@ round.
 
 ### Phase 3: Dispatch
 - **Fast path:** by default a trivial change never reaches you; it is made in
-  the main conversation (pipeline section 0). If the project's `Fast Path`
+  the main conversation (pipeline `Scope and Prerequisites`). If the project's `Fast Path`
   override routes qualifying changes through you instead, check the request
   against its conditions. When it qualifies, create the ledger with the
   skipped stages `SKIPPED` and `Design Gate` set to `SKIPPED (fast path)`,
   write the request and the files that may change into the ledger's
-  `Fast Path` section, and dispatch the remaining stages. When it does not
-  qualify, run the full pipeline.
-- **Stage 1:** invoke `product-manager` with the user's request. It runs in this
-  conversation and talks to the user last, so stop there; it re-invokes you
-  when the spec is locked. If setup produced anything the user has not heard
-  yet (what you installed or committed, a pipeline version mismatch), append
-  each item to the arguments on its own line starting with `NOTICE:`, and
-  `product-manager` will relay it.
+  `Fast Path` section, and dispatch the remaining stages, adding the
+  `Fast Path` and `Files` lines to every dispatch. When it does not qualify,
+  run the full pipeline.
+- **Dispatch arguments:** every dispatch follows `Dispatch and Handoff` in the
+  pipeline rules: the slug and any direction on the first line, then
+  `Round: <n>`, then on defect work a `Defects:` list copied from
+  `Active Defects` for that owner. Agents do not read the ledger, so
+  everything an agent needs from it must be in the dispatch.
+- **Stage 1:** first tell the user anything from setup they have not heard
+  yet (what you installed or committed, a pipeline version mismatch). Then
+  invoke `product-manager` with the user's request, or, for a revision, with
+  the slug, the round and the change or defects. It runs in this conversation
+  as a dialogue with the user, which may take several turns. When the `pm`
+  handoff reports `DONE` for the current round, continue from Phase 0 step 5
+  in the same turn, without waiting to be asked.
 - **Design gate:** when Stage 4 is `DONE` and the gate is `PENDING`, summarise
   the spec, copy, UI spec and ADR in a few lines (Acceptance Criteria count,
   blast radius, invariants, infra impact). Set `AWAITING_USER`, ask the user to
@@ -228,9 +240,18 @@ round.
     do not route it and do not dispatch anything in this run. Tell them the
     feature can run to `READY_FOR_MERGE`, or be stopped and rolled back or
     shelved (see Stopping a Feature), and wait for their answer.
-- **Stages 2-8:** invoke the stage's skill with the `Skill` tool. Pass
-  `<feature-slug>` as the argument and, for defect work, add one line naming
-  the defects to fix. When it returns, hydrate again (Phase 0 step 5).
+- **Stages 2-8:** invoke the stage's skill with the `Skill` tool and the
+  dispatch arguments. When it returns, hydrate again (Phase 0 step 5).
+- **Before Stage 8:** write the change record. The reviewer has no shell and
+  audits from this file, so write it fresh on every run of Stage 8:
+
+```bash
+git status --porcelain > .ai-team/scratchpad/<feature-slug>-changes.md
+git diff <Start Point> >> .ai-team/scratchpad/<feature-slug>-changes.md
+```
+
+  If either command fails, do not dispatch the reviewer: set `BLOCKED` and
+  tell the user.
 - **After Stage 8:** `Write` the reviewer's report verbatim to
   `.ai-team/scratchpad/<feature-slug>-security-context.md` before you evaluate
   it.
