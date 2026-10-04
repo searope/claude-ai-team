@@ -27,23 +27,33 @@ Tell the user that the answer goes on the `Workflow` line of the project file
 and can be changed there, and that a word in the command, `worktree` or
 `in-place`, overrides it for one feature.
 
-**How should a new worktree get what git does not track?** Ask this only when
-there is something to get. Run `git status --porcelain --ignored` and look for
-what the project needs to build or run but git does not track: a dependency
-folder, a virtual environment, local configuration such as `.env`. Name what
-you found in the question. If you found nothing, do not ask, and write
-`none needed`.
-- **A setup command.** The user names one command, for example `npm ci`. It
-  runs once in every new worktree. Each feature gets its own copy, so features
-  cannot disturb each other. Every new worktree costs the install time and the
-  disk space.
-- **The main folder's environment.** Tools run from this folder's environment;
-  the user says how, for example the path of its interpreter. There is no
-  install time. All features share one environment, so a feature that adds or
-  upgrades a dependency changes it for every other feature and for this
-  folder.
-- **Not now.** Nothing is prepared. A feature in a worktree stops at the first
-  tool it cannot find and asks the user then. Features in place are not
+**What should every new worktree get from this folder?** A worktree has only
+the files git tracks. Ask this only when this folder has more than that. Run
+`git status --porcelain --ignored` and sort what git ignores into two lists:
+- **Needed** to build, run or test the project: local configuration such as
+  `.env`, dependency folders such as `.venv` or `node_modules`, and local data
+  files the code reads.
+- **Not needed:** build output, caches, logs, editor folders, and the
+  pipeline's own `.ai-team/`.
+
+Show the user both lists, and say which of the needed entries are secret files
+and which are folders that may be large. If nothing is needed, do not ask, and
+write `none needed`. Offer the first choice as the recommended one.
+- **Copy what is needed.** Claude Code copies the needed files and folders
+  into every new worktree when it creates one. This leads to four things.
+  Every worktree holds a copy of the secret files, and any agent working there
+  can read them until the folder is removed. A dependency folder is copied
+  whole each time, which costs time and disk space. A copied environment in
+  which the project itself is installed in editable mode still points at this
+  folder's code, so tools must be run from the worktree's own folder. And a
+  later change in this folder does not reach worktrees that already exist.
+- **Copy the files, share the environment.** Only single files such as `.env`
+  are copied. Tools run from this folder's environment; the user says how, for
+  example the path of its interpreter. There is no copy time. All features
+  share one environment, so a feature that adds or upgrades a dependency
+  changes it for every other feature and for this folder.
+- **Copy nothing.** A worktree has only the files git tracks. A step that
+  needs anything else stops and asks the user. Features in place are not
   affected.
 
 ---
@@ -52,7 +62,12 @@ you found in the question. If you found nothing, do not ask, and write
 
 - `Read` the template and `Write` it to `.claude/ai-team-project.md`, with the
   project's name in the title and the user's answers on the `Workflow` and
-  `Worktree setup` lines. Change nothing else in it.
+  `Worktree setup` lines. On the `Worktree setup` line say what a worktree
+  gets and how tools are to be run there. Change nothing else in the template.
+- **If anything is to be copied,** `Write` `.worktreeinclude` in the project
+  root: one line for each path to copy, a folder with a trailing `/`. Claude
+  Code reads that file when it creates a worktree and copies only what is
+  listed there and ignored by git. Copy nothing yourself.
 - Add the import. If `CLAUDE.md` exists in the project root, append the line
   `@.claude/ai-team-project.md` unless it is already there. If only
   `.claude/CLAUDE.md` exists, append `@ai-team-project.md` there. If neither
@@ -84,6 +99,8 @@ you found in the question. If you found nothing, do not ask, and write
 
 - What you created and what you committed.
 - That they should adjust `Project Paths` in the project file.
+- What every new worktree will get, and that `.worktreeinclude` is the place
+  to change it. Worktrees that already exist are not updated.
 - **The repository has a remote:** a worktree starts from the remote's base
   branch, so it has the project file only once this commit is there. Until
   the user pushes the commit, or merges it there, no feature can run in a

@@ -30,8 +30,8 @@ Edit this block to match the project. Agents use it to tell write areas apart.
 ## Git Workflow
 
 - **Workflow:** <ask | worktree | in-place | worktree only | in-place only>
-- **Worktree setup:** <how a new worktree gets what git does not track, or
-  `none needed`, or `not decided`>
+- **Worktree setup:** <what a new worktree gets beyond the files git tracks
+  and how tools are run there, or `none needed`, or `not decided`>
 
 `Workflow` decides where a feature is developed when the command does not say
 and the session is in the main folder. With `worktree`, each feature gets a

@@ -35,9 +35,11 @@ Two facts are used throughout:
      worktree and give the same command there, or run the feature in place
      with `/team-lead in-place <request>`. Leave the second one out when the
      project file says `worktree only`.
-2. **Check the project file is there.** If the worktree has no project file,
-   the commit that installed it is not on the base branch yet. Stop and tell
-   the user to get that commit onto the base branch first.
+2. **Check what the worktree has.** If it has no project file, the commit that
+   installed it is not on the base branch yet: stop and tell the user to get
+   that commit onto the base branch first. If `.worktreeinclude` lists a path
+   that is missing here, tell the user: Claude Code copies those only into a
+   worktree it creates itself. Do not copy it yourself.
 3. **Start from the current base.** `git rev-list --count HEAD..<base>` prints
    how many base commits the worktree lacks. If it is not `0`, run
    `git merge <base>`.
@@ -55,6 +57,13 @@ merge into the base branch, unless the project's `Git Workflow` tells you to.
 
 To commit, run `git status --porcelain`, stage every path it lists by name
 with `git add -- <paths>`, and commit. Never use `git add -A` or `git add .`.
+
+Before you stage, look at the list. If a path looks like a secret (`.env`, a
+key or a credential file) or like a dependency or build folder
+(`node_modules/`, a virtual environment, `dist/`, `build/`), do not stage
+anything: stop and tell the user. Such a path has to be ignored by git, and a
+worktree gets it through `.worktreeinclude`, not through a commit.
+
 The messages are:
 - before an update: `<feature-slug>: work in progress`
 - at delivery: `<feature-slug>: <the title of the spec>`

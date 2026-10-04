@@ -32,10 +32,11 @@ project and never overwrites it. Every dispatch names it (A5). It holds:
 - **Git Workflow:** two settings for the git workflows (B5).
   - `Workflow` is the project's choice between them: `ask`, `worktree`,
     `in-place`, `worktree only` or `in-place only`.
-  - `Worktree setup` says how a new worktree gets what git does not track:
-    dependencies, a virtual environment, local configuration. An agent that
-    finds a tool or a dependency missing in a worktree follows it before
-    anything else. Doing so is not adding a dependency.
+  - `Worktree setup` says what a new worktree gets beyond the files git
+    tracks, such as local configuration and dependency folders, and how tools
+    are to be run there. An agent that finds a tool or a dependency missing in
+    a worktree follows it before anything else. Doing so is not adding a
+    dependency.
 - **Overrides for this project:** the project's own rules (A6).
 
 **Older projects.** A project file without a `Git Workflow` block is read as
@@ -79,6 +80,12 @@ the names an agent uses to say what it is blocked on (A5).
 - Only `team-lead` runs git commands that change the repository, and only
   those the git workflow gives it (B5). No other agent commits, pushes,
   merges, stashes or resets.
+- No agent opens, prints or copies a file that holds secrets, such as `.env`,
+  a key or a credential file. Running a tool that reads one is allowed. Such
+  a file is never staged or committed.
+- An agent runs every tool from the folder it was dispatched in. An
+  environment may point at another folder's code, and a tool run from
+  elsewhere would build or test that code instead.
 - Nothing is deleted or stashed except by `team-lead`, and only after the user
   has chosen how to stop a feature (B5). Generated files are the one
   exception: a file that a tool run created as a side effect (a cache,
@@ -96,6 +103,7 @@ specs or state.
 ```text
 .
 +-- CLAUDE.md                                   # imports the project file
++-- .worktreeinclude                            # what a new worktree gets (A1)
 +-- .claude/
 |   +-- ai-team-project.md                      # project file (A1)
 +-- docs/
