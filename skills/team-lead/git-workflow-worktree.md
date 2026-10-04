@@ -37,7 +37,10 @@ Two facts are used throughout:
      project file says `worktree only`.
 2. **Check the project file is there.** If the worktree has no project file,
    the commit that installed it is not on the base branch yet. Stop and tell
-   the user to get that commit onto the base branch first.
+   the user to get that commit onto the base branch first. If its
+   `Worktree setup` line says `not decided`, stop as well: no stage can run a
+   tool in a worktree without it. Tell the user what the line has to say, and
+   that they write it into the project file.
 3. **Start from the current base.** `git rev-list --count HEAD..<base>` prints
    how many base commits the worktree lacks. If it is not `0`, run
    `git merge <base>`.
@@ -53,8 +56,9 @@ Two facts are used throughout:
 You commit on the feature's branch, and nowhere else. Never push, and never
 merge into the base branch, unless the project's `Git Workflow` tells you to.
 
-To commit, run `git status --porcelain`, stage every path it lists by name
-with `git add -- <paths>`, and commit. Never use `git add -A` or `git add .`.
+To commit, run `git status --porcelain --untracked-files=all`, which lists
+every new file and not only its folder. Stage every path it lists by name with
+`git add -- <paths>`, and commit. Never use `git add -A` or `git add .`.
 
 Before you stage, look at the list. If a path looks like a secret (`.env`, a
 key or a credential file) or like a dependency or build folder
@@ -85,22 +89,26 @@ Do this before each run of Testing, on `sync`, and at the start of a resume.
    line.
 6. **The merge stops on a conflict:** do not resolve it yourself, and do not
    abort it. `git status --porcelain` lists the conflicting files. Each one is
-   a defect in the area it lies in. Route to the owners as a backward route
-   that increments no counter, with the direction
-   `Resolve the merge conflict with <base> in <files>`. When the owners have
-   reported `DONE`, stage the resolved files by name, complete the merge with
-   `git commit --no-edit`, and then do step 5.
+   a defect in the area it lies in. Route each to the stage that writes its
+   area, with the direction
+   `Resolve the merge conflict with <base> in <files>`. This is a backward
+   route: `Round` goes up, but it counts toward no cap. A conflicting file
+   that lies in no area is the user's to resolve: set `BLOCKED` and name the
+   file. When the conflicts are resolved, stage the resolved files by name,
+   complete the merge with `git commit --no-edit`, and then do step 5.
 7. **On `sync` or on a resume, when Testing has already run:** if the merge
-   brought changes in, it is a backward route to Testing that increments no
-   counter. If it brought nothing, say so and change nothing.
+   brought changes in, it is a backward route to Testing that counts toward
+   no cap. If it brought nothing, say so and change nothing.
 
 ---
 
 ## Deliver
 
-1. Run `git status --porcelain`. Every path it lists must be in the change
-   record the reviewer just passed. If one is not, something changed after the
-   review: do not commit, write a new change record and run Security again.
+1. Run `git status --porcelain --untracked-files=all`. Every path it lists
+   must be in the change record the reviewer just passed. If one is not,
+   something changed after the review: do not commit. It is a backward route
+   to Security that counts toward no cap: `Round` goes up, and you write a new
+   change record and run Security again.
 2. Commit those paths (see Commit).
 3. Check the base once more with steps 1 and 2 of Update. If the base has
    commits the branch lacks, do not merge them. Say in your report how many
@@ -117,7 +125,7 @@ Do this before each run of Testing, on `sync`, and at the start of a resume.
 Present the two options of the rules together with what would be lost, and
 wait for the answer (use `AskUserQuestion` when it is available). Build the
 list from git, not from handoffs:
-- `git status --porcelain`: every uncommitted path.
+- `git status --porcelain --untracked-files=all`: every uncommitted path.
 - `git log --oneline <base>..HEAD`: the commits on the feature's branch.
 - Warn that a rollback deletes both for good, and that the list may hold edits
   the user made by hand. A shelved feature keeps everything.

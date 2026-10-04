@@ -10,13 +10,16 @@ instead.
 
 ## Start
 
-Run `git status --porcelain`. Leave `.claude/worktrees/` out of this check and
+First look at the ledgers in this folder. If one of them is `IN_PROGRESS`,
+`AWAITING_USER` or `BLOCKED`, another feature is in development here, whether
+or not it has changed a file yet: tell the user to finish, roll back or shelve
+that feature first, and stop.
+
+Then run `git status --porcelain --untracked-files=all`, which lists every new
+file and not only its folder. Leave `.claude/worktrees/` out of this check and
 never stage it: it holds the worktrees of other features. If the working tree
-is not clean, list the uncommitted paths and do one of these:
-- **Another feature is still in development** (its ledger is `IN_PROGRESS`,
-  `AWAITING_USER` or `BLOCKED`): do not offer a commit. Tell the user to
-  finish, roll back or shelve that feature first, and stop.
-- **Otherwise, offer a checkpoint commit.** Ask the user whether you should
+is not clean, list the uncommitted paths and do this:
+- **Offer a checkpoint commit.** Ask the user whether you should
   commit the listed paths so the feature has a clean starting state (use
   `AskUserQuestion` when it is available), and wait. If some paths belong to a
   feature that is `READY_FOR_MERGE`, say so: committing them accepts that
@@ -45,7 +48,8 @@ Present the two options of the rules together with the rollback list, and wait
 for the answer (use `AskUserQuestion` when it is available). Build the list
 from git, not from handoffs, so that the partial work of an interrupted stage
 is included:
-- `git status --porcelain`: every modified, deleted or untracked path.
+- `git status --porcelain --untracked-files=all`: every modified, deleted or
+  untracked path.
 - `git log <Start Point>..HEAD`: commits made since the feature started. You
   cannot undo those; name them and leave them to the user.
 - Warn that a rollback deletes uncommitted work for good, and that the list

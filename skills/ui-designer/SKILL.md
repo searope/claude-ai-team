@@ -1,10 +1,11 @@
 ---
 name: ui-designer
 description: >-
-  Use this skill to design distinctive, production-grade user interfaces (UI):
-  aesthetic direction, ASCII wireframes, component hierarchies, design tokens,
-  6-state interaction matrices, and WCAG 2.2 AA accessibility contracts.
-argument-hint: "<feature-slug> [direction]"
+  AI team pipeline stage: designs a feature's interface: wireframes, component
+  states, design tokens and accessibility. It runs on a dispatch from the
+  pipeline, not on its own.
+argument-hint: "<dispatch>"
+user-invocable: false
 context: fork
 agent: ai-team-author
 background: false
@@ -17,7 +18,7 @@ allowed-tools:
   - "Edit(docs/design/**)"
   - "Edit(.ai-team/scratchpad/**)"
 metadata:
-  version: "5.0"
+  version: "6.0"
   role: "Principal UI/UX Designer"
 ---
 
@@ -37,8 +38,8 @@ Arguments: $ARGUMENTS
 ---
 
 ## Inputs and Output
-- **Inputs:** the spec and the copy file.
-- **Output:** the UI spec, and your handoff (role `ui`).
+- **Inputs:** the artifacts your dispatch lists.
+- **Output:** the UI spec, and your handoff.
 
 ---
 
@@ -50,8 +51,9 @@ Arguments: $ARGUMENTS
    intentional display fonts, tabular numerals, and deliberate surface colors.
 3. **NO INVENTED COPY:** Reference every string by its copy key, never by
    placeholder text. If a component or state needs a string the copy file
-   lacks, list the missing strings and escalate, blocked on `Copy`. If the
-   spec itself is ambiguous, escalate, blocked on `Spec`.
+   lacks, list the missing strings and escalate.
+4. **NO GUESSED REQUIREMENTS:** If an input is ambiguous or contradictory,
+   escalate.
 
 ---
 
@@ -75,4 +77,5 @@ Design the interface across these pillars:
    landmarks. Never use color alone to convey status.
 
 ### Phase 3: Completion
-Write the UI spec, then your handoff.
+Write the UI spec, carrying what the Artifact Contracts require of a UI spec,
+then your handoff.
