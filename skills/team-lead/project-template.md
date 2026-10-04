@@ -33,16 +33,10 @@ Edit this block to match the project. Agents use it to tell write areas apart.
 - **Worktree setup:** <what a worktree gets besides the files git tracks and
   how tools are run in it, or `none needed`, or `not decided`>
 
-`Workflow` decides where a feature is developed when the command does not say
-and the session is in the main folder. With `worktree`, each feature gets a
-folder and a branch of its own and `team-lead` commits there. With `in-place`,
-features run one at a time in this folder and you commit them. With `ask`,
-`team-lead` asks each time. An `only` value forbids the other workflow.
-
-`Worktree setup` is what the agents follow when a feature runs in a worktree,
-which starts as a fresh checkout: which environment the tools use, what makes
-the worktree's own code the code that runs, what a feature does when it needs
-a new dependency, and what a tool there sees of your settings file.
+`Workflow` says where a feature is developed when the command does not: in a
+worktree of its own, in place in this folder, or `ask` each time. An `only`
+value forbids the other workflow. `Worktree setup` is what the agents follow
+in a worktree, which starts as a fresh checkout.
 
 ## Overrides for this project
 

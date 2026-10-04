@@ -37,7 +37,8 @@ Arguments: $ARGUMENTS
 ## Inputs and Output
 - **Inputs:** the artifacts your dispatch lists, the change record among them,
   and the changed files themselves. Read every new file on the change record's
-  status list in full, because the diff does not contain it.
+  status list in full, because the diff does not contain it. A new file that
+  holds secrets is not opened: its path is a blocker on `user`.
 - **Output:** a report, returned as your final message.
 
 ---
@@ -58,21 +59,19 @@ Arguments: $ARGUMENTS
 ## Audit Protocol
 
 ### Phase 1: Scope & Security Audit
-1. Check every changed path against Write Isolation in the rules: it must lie
-   in an area, within that area's limit. A path that does not is a blocker on
-   the area whose limit it breaks, or on `user` when it lies in no area. The
-   feature's own design artifacts are not audited.
+1. Check every changed path against Write Isolation in the rules. A path it
+   does not allow is a blocker: on the area whose limit it breaks, or on
+   `user` when no area can hold it. The feature's own design artifacts are not
+   audited.
 2. Inspect for Injection, Broken Auth, data leaks, and race conditions.
 3. Verify UI Error and Degraded states do not leak internal stack traces.
 4. Check infra changes against what the Artifact Contracts require of them,
-   and for secrets in CI logs.
+   and for CI steps that would print a secret into a log.
 
 ### Phase 2: Test Adequacy Audit
 Audit the tests against what the Artifact Contracts require of tests.
 1. Every Acceptance Criterion and every Invariant has a test that verifies
-   it. A test that does not name what it verifies still counts for what it
-   plainly verifies. A criterion or invariant with no test is a blocker on
-   `Tests`.
+   it. A criterion or invariant with no test is a blocker on `Tests`.
 2. Hunt for vacuous tests. Every vacuous test is a blocker on `Tests`. Never
    downgrade one to an observation.
 

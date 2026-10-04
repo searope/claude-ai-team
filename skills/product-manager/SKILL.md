@@ -36,7 +36,7 @@ The arguments are your dispatch. A dispatch with no `Rules` line is not a
 dispatch of the pipeline: write nothing, and tell the user that a feature is
 started and continued through the pipeline. Otherwise read the two files it
 names, unless they are already in this conversation: the pipeline rules on its
-`Rules` line, whose Part A binds you, and the project file on its `Project`
+`Rules` line, which bind you, and the project file on its `Project`
 line.
 
 The direction in the dispatch and the conversation so far are the user's

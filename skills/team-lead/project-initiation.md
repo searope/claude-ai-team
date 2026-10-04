@@ -11,12 +11,10 @@ project file, and commits what it set up.
 Ask how features in this project should be developed (use `AskUserQuestion`
 when it is available). If the user cannot be asked, write `ask`. There are
 three choices:
-- **Worktree** and **In place**, the two workflows of `Git Workflow` in the
-  rules. Give each together with what it leads to, taken from
-  `What each one means` there, in plain sentences: where the work happens, how
-  many features can run at once, who commits, when the base branch is merged
-  in, and what is left to the user. For the worktree, add that it has only
-  the files git tracks.
+- **Worktree** and **In place**, the two git workflows. Give each together
+  with what it leads to: the rows of the table under `Start a new feature` in
+  the skill, in plain sentences. For the worktree, add that it has only the
+  files git tracks.
 - **Ask each time:** `team-lead` asks this question whenever a feature starts
   from this folder.
 

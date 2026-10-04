@@ -48,7 +48,7 @@ Arguments: $ARGUMENTS
 2. **ZERO TEST DILUTION:** If a test fails due to a production bug, do NOT
    weaken the test. Leave it failing and report it.
 3. **HERMETIC DETERMINISM:** Mock external networks and databases.
-4. **SHELL USE:** Test runners and read-only `git` commands only.
+4. **SHELL USE:** Test runners and read-only `git` commands.
 5. **NO GUESSED CONTRACTS:** An Acceptance Criterion or an Invariant that
    cannot be tested is escalated.
 6. **NO VACUOUS TESTS:** Every test must be able to fail, as the Artifact

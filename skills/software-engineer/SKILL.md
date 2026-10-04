@@ -51,7 +51,7 @@ Arguments: $ARGUMENTS
    tests; you may not change them.
 3. **6-STATE FIDELITY:** If the feature has a UI, implement all six UI states
    exactly as designed, using the exact text of the copy file.
-4. **SHELL USE:** Compilers, type-checkers, linters and test runners only.
+4. **SHELL USE:** Compilers, type-checkers, linters and test runners.
 5. **NO GUESSED CONTRACTS:** If an artifact is ambiguous or contradictory,
    escalate.
 
@@ -71,8 +71,8 @@ requires.
 
 ### Phase 3: Autonomous Verification
 Run local compilers, type-checkers, and baseline unit tests. Auto-fix any
-build failures up to 3 times. If the build still fails, escalate, blocked on
-`user`.
+build failures up to 3 times. If the build still fails for a reason in your
+own area, escalate, blocked on `user`.
 
 ### Phase 4: Completion
 Write your handoff. After the handoff block, add the tasks completed and the

@@ -1,9 +1,10 @@
 # Git Workflow: Worktree
 
-This is how `team-lead` carries out the worktree workflow of `Git Workflow` in
-the pipeline rules. The feature is developed in a worktree, on a branch of its
-own, and you commit its work there. Skip every part that the project's
-`Git Workflow` override replaces, and do what the override says instead.
+This is how `team-lead` carries out the worktree workflow. The feature is
+developed in a worktree, a separate folder with a branch of its own, and you
+commit its work there. A worktree that you make lies under
+`.claude/worktrees/`. Skip every part that the project's `Git Workflow`
+override replaces, and do what the override says instead.
 
 Two facts are used throughout:
 - **Am I in a worktree?** `git rev-parse --git-dir` and
@@ -13,17 +14,22 @@ Two facts are used throughout:
   into. The project's `Git Workflow` override may name it. Otherwise, in a
   repository with a remote named `origin`, it is what
   `git symbolic-ref --short refs/remotes/origin/HEAD` prints; run
-  `git fetch origin` before you use it. Without a remote it is the branch
-  checked out in the main folder, which `git worktree list` names first.
+  `git fetch origin` before you use it. Without a remote, or when that
+  command fails, it is the branch checked out in the main folder, which
+  `git worktree list` names first. Tell the user which branch you took.
 
 ---
 
 ## Start
 
 1. **Get into a worktree.**
-   - **The session is in the main folder:** move it into a new worktree with
-     the `EnterWorktree` tool, giving the feature's slug as `name`. The user
-     or the project file asked for a worktree, which is what that tool
+   - **The session is in the main folder:** first check that the base branch
+     has the project file: `git rev-parse --verify --quiet <base>:<its path>`
+     prints a hash when it does. If it prints nothing, stop before you make a
+     worktree, and tell the user that the commit that set the project up has
+     to reach the base branch first. Then move the session into a new worktree
+     with the `EnterWorktree` tool, giving the feature's slug as `name`. The
+     user or the project file asked for a worktree, which is what that tool
      requires. Claude Code may show the user a window to confirm; wait for it.
    - **The session is already in a worktree:** use it, if
      `git status --porcelain` prints nothing and no ledger there is
@@ -41,9 +47,13 @@ Two facts are used throughout:
    `Worktree setup` line says `not decided`, stop as well: no stage can run a
    tool in a worktree without it. Tell the user what the line has to say, and
    that they write it into the project file.
-3. **Start from the current base.** `git rev-list --count HEAD..<base>` prints
-   how many base commits the worktree lacks. If it is not `0`, run
-   `git merge <base>`.
+3. **Start from the current base.** `git rev-list --count <base>..HEAD` prints
+   how many commits this worktree's branch has that the base lacks. If it is
+   not `0`, the feature would be built on top of them and its review would not
+   see them: show them with `git log --oneline <base>..HEAD`, ask the user
+   whether to build on them, and stop on no. Then
+   `git rev-list --count HEAD..<base>` prints how many base commits the
+   worktree lacks. If it is not `0`, run `git merge <base>`.
 4. **Make the feature's branch:** `git switch -c agent/<feature-slug>`, unless
    `git branch --show-current` already prints that name.
 5. The feature's `Start Point` is `git rev-parse HEAD` now. Record the
@@ -68,7 +78,8 @@ committed.
 
 The messages are:
 - before an update: `<feature-slug>: work in progress`
-- at delivery: `<feature-slug>: <the title of the spec>`
+- at delivery: `<feature-slug>: <the title of the spec>`, or on a fast path
+  the request in short
 - when shelving: `<feature-slug>: shelved work in progress`
 
 ---
@@ -76,6 +87,12 @@ The messages are:
 ## Update
 
 Do this before each run of Testing, on `sync`, and at the start of a resume.
+
+If a merge is already in progress, do not start again:
+`git rev-parse --verify --quiet MERGE_HEAD` prints a hash then. When
+`git diff --name-only --diff-filter=U` prints nothing, the conflicts are
+resolved: go to the end of step 6. Otherwise they are still with the stages
+they were routed to.
 
 1. In a repository with a remote, run `git fetch origin`.
 2. Run `git rev-list --count HEAD..<base>`. If it prints `0`, the branch is up
@@ -85,8 +102,8 @@ Do this before each run of Testing, on `sync`, and at the start of a resume.
    worktree the app made, use the app's own tool for bringing a branch up to
    date with its base. Otherwise run `git merge <base>`. Never rebase.
 5. **The merge is clean:** set `Start Point` in the ledger to
-   `git rev-parse <base>`, the base commit you merged, and add a `History`
-   line.
+   `git rev-parse <base>`, the base commit you merged, so that the change
+   record still shows only the feature's own changes. Add a `History` line.
 6. **The merge stops on a conflict:** do not resolve it yourself, and do not
    abort it. `git status --porcelain` lists the conflicting files. Each one is
    a defect in the area it lies in. Route each to the stage that writes its
@@ -108,7 +125,8 @@ Do this before each run of Testing, on `sync`, and at the start of a resume.
    must be in the change record the reviewer just passed. If one is not,
    something changed after the review: do not commit. It is a backward route
    to Security that counts toward no cap: `Round` goes up, and you write a new
-   change record and run Security again.
+   change record and run Security again. If it happens twice in a row, set
+   `BLOCKED` and name the paths that keep changing.
 2. Commit those paths (see Commit).
 3. Check the base once more with steps 1 and 2 of Update. If the base has
    commits the branch lacks, do not merge them. Say in your report how many
@@ -122,13 +140,16 @@ Do this before each run of Testing, on `sync`, and at the start of a resume.
 
 ## Stop
 
-Present the two options of the rules together with what would be lost, and
-wait for the answer (use `AskUserQuestion` when it is available). Build the
-list from git, not from handoffs:
-- `git status --porcelain --untracked-files=all`: every uncommitted path.
+Present the two options, a rollback or shelving, together with what would be
+lost, and wait for the answer (use `AskUserQuestion` when it is available).
+Build the list from git, not from handoffs:
+- `git status --porcelain --untracked-files=all`: every uncommitted path, the
+  partial work of an interrupted stage included.
 - `git log --oneline <base>..HEAD`: the commits on the feature's branch.
-- Warn that a rollback deletes both for good, and that the list may hold edits
-  the user made by hand. A shelved feature keeps everything.
+- The feature's working files under `.ai-team/`: its handoffs, its change
+  record and its ledger. Git ignores them, so name them yourself.
+- Warn that a rollback deletes all of these for good, and that the list may
+  hold edits the user made by hand. A shelved feature keeps everything.
 
 If the user asks for a rollback directly, without having seen the list, show
 the list and get a confirmation first.

@@ -51,7 +51,7 @@ Arguments: $ARGUMENTS
 2. **SAFETY FIRST:** Your changes carry what the Artifact Contracts require of
    infra changes: reversible migrations, containers without root, and no
    secrets in files.
-3. **SHELL USE:** Linters, validators and dry runs only. Never apply a
+3. **SHELL USE:** Linters, validators and dry runs. Never apply a
    migration to a shared database.
 
 ---

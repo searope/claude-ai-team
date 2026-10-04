@@ -1,10 +1,9 @@
 # Git Workflow: In Place
 
-This is how `team-lead` carries out the in-place workflow of `Git Workflow` in
-the pipeline rules. The feature is developed in the folder the session is in,
-on the branch checked out there, and the user commits it. Skip every part that
-the project's `Git Workflow` override replaces, and do what the override says
-instead.
+This is how `team-lead` carries out the in-place workflow. The feature is
+developed in the folder the session is in, on the branch checked out there,
+and the user commits it. Skip every part that the project's `Git Workflow`
+override replaces, and do what the override says instead.
 
 ---
 
@@ -44,14 +43,16 @@ remind them that the next feature can start only after that commit.
 
 ## Stop
 
-Present the two options of the rules together with the rollback list, and wait
-for the answer (use `AskUserQuestion` when it is available). Build the list
-from git, not from handoffs, so that the partial work of an interrupted stage
-is included:
+Present the two options, a rollback or shelving, together with the rollback
+list, and wait for the answer (use `AskUserQuestion` when it is available).
+Build the list from git, not from handoffs, so that the partial work of an
+interrupted stage is included:
 - `git status --porcelain --untracked-files=all`: every modified, deleted or
   untracked path.
 - `git log <Start Point>..HEAD`: commits made since the feature started. You
   cannot undo those; name them and leave them to the user.
+- The feature's working files under `.ai-team/`: its handoffs, its change
+  record and its ledger. Git ignores them, so name them yourself.
 - Warn that a rollback deletes uncommitted work for good, and that the list
   may hold edits the user made by hand since the feature started. Those go too
   unless the user saves them first.

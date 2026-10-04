@@ -8,19 +8,26 @@ and merge.
 
 - A **skill** describes one role's work: what it produces and its quality bar. Its text names no other role, no
   stage and no file location. What it builds on, where it reports and which rules bind it reach it in its
-  dispatch, so it runs only when the pipeline dispatches it. The one path a skill still knows is in the
-  `allowed-tools` of its frontmatter, which pre-approves writes in its own folder.
+  dispatch, so it runs only when the pipeline dispatches it. The only paths a skill still knows are in the
+  `allowed-tools` of the four design skills, which pre-approve writes in their own folder and in the handoff
+  folder.
 - The eight specialist skills are hidden from the slash-command menu, with `user-invocable: false` in their
-  frontmatter. `/team-lead` is the only command of the team that you type; it calls the others.
-- An **agent type** is a tool profile for an isolated agent: file tools or not, a shell or not. Its only other
-  job is to make the agent read the two files its dispatch names, the pipeline rules and the project file.
-- The **pipeline rules** are the only place where the roles are tied together, and the skills are named in one
-  table there, the Routing Table. For each stage it gives the skill, the name of its handoff, the artifacts it
-  builds on, the area it writes and the condition it runs under. Part A binds every agent: write areas, the
-  fields each artifact must carry, and how an agent is dispatched and reports. Part B is the orchestration:
-  stage order, the design gate, routing and the git workflow. There is one copy of the rules, next to
+  frontmatter. `/team-lead` is the only command of the team that you type; it calls the others. The model can
+  still call a hidden skill, and a call that carries no dispatch is refused by the skill's agent type.
+- An **agent type** is a tool profile for an isolated agent: file tools or not, a shell or not. Besides that it
+  makes the agent read the two files its dispatch names, the pipeline rules and the project file. The tools are
+  the only thing that is technically enforced: the path limits of the write areas are rules the agents follow
+  and the security review audits.
+- The **pipeline rules** bind every agent and name no skill: the write areas, the fields each artifact must
+  carry, how tools are run, and how an agent is dispatched and reports. There is one copy of the rules, next to
   `team-lead`. Every project reads it from there, so no project can fall behind the installed rules. Only a
   session that is still open keeps the text it loaded, until `/team-lead` is typed in it again.
+- **`team-lead`** is the orchestrator, and the only place where the roles are tied together. Its Routing Table
+  gives for each stage the skill, the name of its handoff, the artifacts it builds on, the area it writes and
+  the condition it runs under. The stage order, the design gate, routing and the choice of git workflow are in
+  its skill as well, and no isolated agent reads them. It builds each dispatch from the stage's row in the
+  table. An agent that is stuck names the area it is blocked on, and `team-lead` routes that to the stage that
+  writes the area.
 - Agents do not talk to each other. A stage builds on **artifacts** whose required fields the rules define, and
   reports to `team-lead` in a **handoff**. No agent reads another agent's handoff unless its dispatch cites it.
   What two roles have to agree on, such as what makes a test count, is in the Artifact Contracts of the rules
@@ -30,9 +37,6 @@ and merge.
 - A feature runs in one of two **git workflows**, chosen when it starts. In a **worktree**, the feature has a
   folder and a branch of its own, `team-lead` commits there, and several features can run at once. **In place**,
   features run one at a time in the folder you are in, and you commit them.
-- `team-lead` is the only skill that knows the whole picture. It carries out the rules and does not repeat them:
-  it builds each dispatch from the stage's row in the Routing Table. An agent that is stuck names the area it is
-  blocked on, and `team-lead` routes that to the stage that writes the area.
 
 ## What is here
 
@@ -42,8 +46,8 @@ and merge.
     the ADR.
   - `software-engineer`, `devops-engineer`, `test-engineer`: write the code, the infra and the tests.
   - `security-reviewer`: audits the change record that `team-lead` takes from git. It is read-only.
-- `skills/team-lead/ai-team-pipeline.md`: the pipeline rules. This is the only copy; nothing installs it into a
-  project.
+- `skills/team-lead/ai-team-pipeline.md`: the pipeline rules, which every agent reads. This is the only copy;
+  nothing installs it into a project.
 - `skills/team-lead/project-initiation.md` and `project-template.md`: what `team-lead` does and writes on its
   first run in a project. It asks how the project works with git. It also works out what a worktree gets besides
   the files git tracks: which environment its tools use, what makes the worktree's own code the code that runs,
@@ -89,8 +93,8 @@ pwsh ./sync.ps1 install
 
 Then, in any project, start a feature with `/team-lead <description>` or `/team-lead <issue number>`. On its first
 run in a project `team-lead` asks how the project works with git, creates the project file, imports it from the
-project's `CLAUDE.md` and adds `.ai-team/` and `.claude/worktrees/` to `.gitignore`. The project must be a git
-repository; `team-lead` creates one if needed.
+project's `CLAUDE.md` and adds `.ai-team/` and `.claude/worktrees/` to `.gitignore`. It commits what it set up
+when the working tree was clean. The project must be a git repository; `team-lead` creates one if needed.
 
 `install` overwrites the team's files in `~/.claude` with the ones from this repository. It does not delete
 anything: a file that is in `~/.claude` but not here is reported and left in place.
@@ -104,15 +108,18 @@ made and tested here first, and installed last:
 2. Test without installing. Copy the team into a scratch project under other names: each skill folder as
    `.claude/skills/<name>-next/` and each agent type as `.claude/agents/<name>-next.md`, with every team name
    changed to its `-next` form in all of those files. Run it there with `claude -p`, starting from
-   `/team-lead-next`, with the shell commands the build stages need allowed (`--allowedTools`). A project-level
-   skill or agent type is seen only by that project, and the renamed Routing Table dispatches the renamed
-   skills, so the live team takes no part in the test.
+   `/team-lead-next`, with file edits accepted and with the git commands and the shell commands of the build
+   stages allowed (`--allowedTools`). A headless run cannot write under `.claude/`, so put the project file
+   into the scratch project by hand. The first stage is a dialogue: answer it in continued turns
+   (`--continue`). A project-level skill or agent type is seen only by that project, and the renamed Routing
+   Table dispatches the renamed skills, so the live team takes no part in the test.
 3. Run `pwsh ./sync.ps1 check` to see what `install` would change, then `pwsh ./sync.ps1 install`.
 4. Commit, merge and push.
 
-Keep ledgers and handoffs that already exist readable: when a format changes, say in the rules how the old form
-is read. When the rules change, raise `Pipeline Version` in `ai-team-pipeline.md`. Each ledger records the version
-its feature started under.
+Keep ledgers and handoffs that already exist readable: when a format changes, say how the old form is read, in
+the rules for what an agent reads and in `team-lead` for what it reads itself. When the rules change, raise
+`Pipeline Version` in `ai-team-pipeline.md`, and the same number in step 1 of `Setup` in `team-lead`, which
+names the version it is written for. Each ledger records the version its feature started under.
 
 `pwsh ./sync.ps1 save` copies the other way, from `~/.claude` into this repository, and removes here any team file
 that no longer exists there. Use it only to pick up an edit that was made directly in `~/.claude`. On a branch
@@ -126,8 +133,9 @@ working as it is: `team-lead` uses that file as the project file, and only its `
 
 1. Create `.claude/ai-team-project.md` from `skills/team-lead/project-template.md`.
 2. Move the project's `Project Paths` and `Overrides for this project` into it.
-3. In `CLAUDE.md`, import the new file in place of the old one.
-4. Delete `.claude/ai-team-pipeline.md`.
+3. Fill in its `Workflow` and `Worktree setup` lines. The initiation file says what the second has to settle.
+4. In `CLAUDE.md`, import the new file in place of the old one.
+5. Delete `.claude/ai-team-pipeline.md`.
 
 ## Adding a role
 
@@ -137,20 +145,23 @@ this repository, on a branch, as "Change the team" says:
 1. `team.json`: add the skill folder name to `skills`, or the agent file name to `agents`. Until this is done the
    hook refuses to create the files.
 2. `skills/<name>/SKILL.md`, or `agents/<name>.md`: write the skill or agent type. A skill describes only its own
-   role: no other role, no stage, no path. It names one of the agent types in its `agent:` field. A new specialist
-   skill also carries the line `user-invocable: false`, so that only `team-lead` can call it.
-3. `ai-team-pipeline.md`: add the stage's row to the Routing Table, with its handoff name, its inputs, the area
-   it writes and when it runs. If the area or the artifact is new, add it to Write Isolation, to the Artifact
-   Topology and to the Artifact Contracts. Raise `Pipeline Version`.
-4. No skill should need a change. `team-lead` works from the tables, and a skill that has to learn about the new
-   role is coupled to it: put what the two share into the Artifact Contracts instead. Two things outside the
-   skills can need one. An area that depends on the project's own paths also needs a line in
-   `project-template.md` and in each project file. A stage before the design gate moves the gate, which the
-   rules place by stage name.
-5. Give the new stage a number that leaves the others as they are. Projects key their gates and notes to stage
+   role: no other role, no stage, no path. A skill that runs isolated carries `context: fork` and names one of
+   the agent types in its `agent:` field; without the first line the second does nothing. A new specialist
+   skill also carries the line `user-invocable: false`, which keeps it out of the slash-command menu.
+3. `skills/team-lead/SKILL.md`: add the stage's row to the Routing Table, with its skill, its handoff name, its
+   inputs, the area it writes and when it runs, and raise the skill's version. This is the only file that names
+   the new skill.
+4. `ai-team-pipeline.md`, only if the area or the artifact is new: add it to Write Isolation and to the Artifact
+   Contracts, and raise `Pipeline Version`.
+5. No other skill should need a change. A skill that has to learn about the new role is coupled to it: put what
+   the two share into the Artifact Contracts instead. Two things outside the skills can need a change. An area
+   that depends on the project's own paths also needs a line in `project-template.md` and in each project file.
+   A stage placed before the design gate, before Testing or before Security also touches the places that name
+   those stages: the notes under the Routing Table, `Dispatch` in `team-lead`, and the worktree procedure.
+6. Give the new stage a number that leaves the others as they are. Projects key their gates and notes to stage
    numbers, and ledgers in flight list the stages by number.
-6. This README: the roster under "What is here" and the counts in the first paragraph.
-7. Test, install, commit.
+7. This README: the roster under "What is here" and the counts in the first paragraph.
+8. Test, install, commit.
 
 To remove a role, take it out of the Routing Table, `team.json` and this repository. `install` never deletes, so
 remove its folder under `~/.claude/skills` or its file under `~/.claude/agents` by hand.
