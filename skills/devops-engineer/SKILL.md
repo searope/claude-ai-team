@@ -16,7 +16,7 @@ allowed-tools:
   - Edit
   - Write
 metadata:
-  version: "5.0"
+  version: "5.1"
   role: "Principal DevOps Engineer"
 ---
 
@@ -50,8 +50,9 @@ Arguments: $ARGUMENTS
 2. **SAFETY FIRST:** All DB migrations must include a `down` rollback. Drop root
    privileges in containers (`USER nonroot`).
 3. **NO SECRETS IN FILES:** Reference secrets by environment variable name only.
-4. **SHELL USE:** Linters, validators and dry runs only. Never apply a
-   migration to a shared database.
+4. **SHELL USE:** Linters, validators and dry runs only, and removing the
+   generated files they leave behind. Never apply a migration to a shared
+   database.
 
 ---
 

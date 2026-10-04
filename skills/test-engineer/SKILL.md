@@ -17,7 +17,7 @@ allowed-tools:
   - Edit
   - Write
 metadata:
-  version: "7.0"
+  version: "7.1"
   role: "Adversarial Test Engineer"
 ---
 
@@ -50,7 +50,8 @@ Arguments: $ARGUMENTS
 2. **ZERO TEST DILUTION:** If a test fails due to a production bug, do NOT
    weaken the test. Leave it failing and report it.
 3. **HERMETIC DETERMINISM:** Mock external networks and databases.
-4. **SHELL USE:** Test runners and read-only `git` commands only.
+4. **SHELL USE:** Test runners and read-only `git` commands only, and removing
+   the generated files the test runs leave behind.
 5. **NO GUESSED CONTRACTS:** An Acceptance Criterion that cannot be tested is
    escalated, blocked on `Spec`; an invariant that cannot be tested, blocked
    on `ADR`.

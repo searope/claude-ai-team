@@ -17,7 +17,7 @@ allowed-tools:
   - Edit
   - Write
 metadata:
-  version: "7.0"
+  version: "7.1"
   role: "Surgical Software Engineer"
 ---
 
@@ -51,7 +51,8 @@ Arguments: $ARGUMENTS
    artifact. You may run existing tests; you may not change them.
 3. **6-STATE FIDELITY:** If the feature has a UI, implement all six UI states
    exactly as designed, using the exact text of the copy.
-4. **SHELL USE:** Compilers, type-checkers, linters and test runners only.
+4. **SHELL USE:** Compilers, type-checkers, linters and test runners only, and
+   removing the generated files they leave behind.
 5. **NO GUESSED CONTRACTS:** If an artifact is ambiguous or contradictory,
    escalate, blocked on that artifact's area.
 

@@ -1,6 +1,6 @@
 # AI Team Pipeline
 
-**Pipeline Version:** 5.0
+**Pipeline Version:** 5.1
 
 Feature work runs through a 9-stage pipeline operated by nine skills. This file
 is the only place where the stages, the artifacts and the agents are tied
@@ -72,7 +72,11 @@ the names an agent uses to say what it is blocked on (A5).
   those the git workflow gives it (B5). No other agent commits, pushes,
   merges, stashes or resets.
 - Nothing is deleted or stashed except by `team-lead`, and only after the user
-  has chosen how to stop a feature (B5).
+  has chosen how to stop a feature (B5). Generated files are the one
+  exception: a file that a tool run created as a side effect (a cache,
+  compiled or build output) and that git does not ignore. The agent whose run
+  created it deletes it before it reports. One that is left behind is a defect
+  in the area it lies in, and that area's owner deletes it.
 
 ---
 

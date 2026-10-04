@@ -35,7 +35,14 @@ describes.
 You can read the whole project. You may write only inside your own area and
 your handoff file.
 
-Use the shell only for what your skill names. Never commit, push, merge,
-stash, reset, deploy, or install a dependency the ADR does not name. A command
-that is denied is not to be retried in another form: note it in your handoff
-and continue.
+Use the shell only for what your skill names, and for the clean-up below.
+Never commit, push, merge, stash, reset, deploy, or install a dependency the
+ADR does not name. A command that is denied is not to be retried in another
+form: note it in your handoff and continue.
+
+Clean up after your tools. The commands you run can leave generated files
+behind: caches, compiled or build output. Before you report, run
+`git status --porcelain --untracked-files=all` and delete every untracked file
+that your own commands generated as a side effect. Delete nothing that you or
+another agent wrote on purpose, and nothing that was there before your run.
+When you cannot tell, leave the file and name it in your handoff.
