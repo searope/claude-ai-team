@@ -1,0 +1,148 @@
+# Git Workflow: Worktree
+
+This is how `team-lead` carries out the worktree workflow of `Git Workflow` in
+the pipeline rules. The feature is developed in a worktree, on a branch of its
+own, and you commit its work there. Skip every part that the project's
+`Git Workflow` override replaces, and do what the override says instead.
+
+Two facts are used throughout:
+- **Am I in a worktree?** `git rev-parse --git-dir` and
+  `git rev-parse --git-common-dir` print different paths in a worktree, and
+  the same path in the project's main folder.
+- **The base branch** is the branch a feature starts from and is merged back
+  into. The project's `Git Workflow` override may name it. Otherwise, in a
+  repository with a remote named `origin`, it is what
+  `git symbolic-ref --short refs/remotes/origin/HEAD` prints; run
+  `git fetch origin` before you use it. Without a remote it is the branch
+  checked out in the main folder, which `git worktree list` names first.
+
+---
+
+## Start
+
+1. **Get into a worktree.**
+   - **The session is in the main folder:** move it into a new worktree with
+     the `EnterWorktree` tool, giving the feature's slug as `name`. The user
+     or the project file asked for a worktree, which is what that tool
+     requires. Claude Code may show the user a window to confirm; wait for it.
+   - **The session is already in a worktree:** use it, if
+     `git status --porcelain` prints nothing and no ledger there is
+     `IN_PROGRESS`, `AWAITING_USER` or `BLOCKED`. Otherwise stop: tell the
+     user that this worktree is taken and by what, and to start the feature
+     from the main folder or from a new session.
+   - **The session cannot be moved** (the tool is missing, it fails, or the
+     user declines): stop. Tell the user the two ways on: open a session in a
+     worktree and give the same command there, or run the feature in place
+     with `/team-lead in-place <request>`. Leave the second one out when the
+     project file says `worktree only`.
+2. **Check the project file is there.** If the worktree has no project file,
+   the commit that installed it is not on the base branch yet. Stop and tell
+   the user to get that commit onto the base branch first.
+3. **Start from the current base.** `git rev-list --count HEAD..<base>` prints
+   how many base commits the worktree lacks. If it is not `0`, run
+   `git merge <base>`.
+4. **Make the feature's branch:** `git switch -c agent/<feature-slug>`, unless
+   `git branch --show-current` already prints that name.
+5. The feature's `Start Point` is `git rev-parse HEAD` now. Record the
+   workflow in the ledger as `worktree`, with the base branch.
+
+---
+
+## Commit
+
+You commit on the feature's branch, and nowhere else. Never push, and never
+merge into the base branch, unless the project's `Git Workflow` tells you to.
+
+To commit, run `git status --porcelain`, stage every path it lists by name
+with `git add -- <paths>`, and commit. Never use `git add -A` or `git add .`.
+The messages are:
+- before an update: `<feature-slug>: work in progress`
+- at delivery: `<feature-slug>: <the title of the spec>`
+- when shelving: `<feature-slug>: shelved work in progress`
+
+---
+
+## Update
+
+Do this before each run of Testing, on `sync`, and at the start of a resume.
+
+1. In a repository with a remote, run `git fetch origin`.
+2. Run `git rev-list --count HEAD..<base>`. If it prints `0`, the branch is up
+   to date: note it in `History`, and you are done.
+3. Commit the work so far (see Commit), if there is any.
+4. Merge the base branch into the feature's branch. In the desktop app, in a
+   worktree the app made, use the app's own tool for bringing a branch up to
+   date with its base. Otherwise run `git merge <base>`. Never rebase.
+5. **The merge is clean:** set `Start Point` in the ledger to
+   `git rev-parse <base>`, the base commit you merged, and add a `History`
+   line.
+6. **The merge stops on a conflict:** do not resolve it yourself, and do not
+   abort it. `git status --porcelain` lists the conflicting files. Each one is
+   a defect in the area it lies in. Route to the owners as a backward route
+   that increments no counter, with the direction
+   `Resolve the merge conflict with <base> in <files>`. When the owners have
+   reported `DONE`, stage the resolved files by name, complete the merge with
+   `git commit --no-edit`, and then do step 5.
+7. **On `sync` or on a resume, when Testing has already run:** if the merge
+   brought changes in, it is a backward route to Testing that increments no
+   counter. If it brought nothing, say so and change nothing.
+
+---
+
+## Deliver
+
+1. Run `git status --porcelain`. Every path it lists must be in the change
+   record the reviewer just passed. If one is not, something changed after the
+   review: do not commit, write a new change record and run Security again.
+2. Commit those paths (see Commit).
+3. Check the base once more with steps 1 and 2 of Update. If the base has
+   commits the branch lacks, do not merge them. Say in your report how many
+   there are, and that `/team-lead <feature-slug> sync` brings them in and
+   runs Testing and Security again.
+4. Set `READY_FOR_MERGE`. Tell the user the name of the branch and what is
+   left to them: merge it into the base branch, or push it and open a pull
+   request, and remove the worktree afterwards.
+
+---
+
+## Stop
+
+Present the two options of the rules together with what would be lost, and
+wait for the answer (use `AskUserQuestion` when it is available). Build the
+list from git, not from handoffs:
+- `git status --porcelain`: every uncommitted path.
+- `git log --oneline <base>..HEAD`: the commits on the feature's branch.
+- Warn that a rollback deletes both for good, and that the list may hold edits
+  the user made by hand. A shelved feature keeps everything.
+
+If the user asks for a rollback directly, without having seen the list, show
+the list and get a confirmation first.
+
+**Roll back:**
+1. If a merge is in progress, run `git merge --abort`.
+2. Restore every modified or deleted tracked path on the list with
+   `git restore --staged --worktree -- <paths>`, and delete every untracked
+   path on the list.
+3. Leave the feature's branch and delete it: `git switch --detach <base>`,
+   then `git branch -D agent/<feature-slug>`.
+4. Delete the feature's handoffs and change record, then its ledger.
+5. Run `git status --porcelain` and confirm that nothing of the feature is
+   left. Tell the user the worktree folder is still there and can be removed.
+
+**Shelve:**
+1. Commit the work so far (see Commit), if there is any.
+2. In the ledger set `Gate Status` to `REJECTED` and `Design Gate` to
+   `PENDING`. Add a `History` line with the stage the feature stopped at and
+   the reason.
+3. Tell the user three things: the work is committed on
+   `agent/<feature-slug>`; the ledger and the handoffs are only in this
+   worktree's `.ai-team/`, so removing the folder loses them; and the feature
+   is resumed from this worktree.
+
+---
+
+## Resume
+
+1. Carry out Update.
+2. In the ledger set `Gate Status` to `IN_PROGRESS`. `Design Gate` stays
+   `PENDING`.

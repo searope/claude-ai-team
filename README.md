@@ -15,8 +15,11 @@ and merge.
   orchestration: stage order, the design gate, routing and the git workflow. There is one copy of the rules, next
   to `team-lead`. Every project reads it from there, so the rules and the skills can never be at different
   versions.
-- A **project file**, `.claude/ai-team-project.md`, is all a project holds: its source, test and infra paths, and
-  its overrides of the rules.
+- A **project file**, `.claude/ai-team-project.md`, is all a project holds: its source, test and infra paths, its
+  git workflow settings, and its overrides of the rules.
+- A feature runs in one of two **git workflows**, chosen when it starts. In a **worktree**, the feature has a
+  folder and a branch of its own, `team-lead` commits there, and several features can run at once. **In place**,
+  features run one at a time in the folder you are in, and you commit them.
 - `team-lead` is the only skill that knows the whole picture. It carries out the rules and does not repeat them.
   An agent that is stuck names the area it is blocked on, and `team-lead` finds the owner.
 
@@ -30,10 +33,11 @@ and merge.
   - `security-reviewer`: audits the change record that `team-lead` takes from git. It is read-only.
 - `skills/team-lead/ai-team-pipeline.md`: the pipeline rules. This is the only copy; nothing installs it into a
   project.
-- `skills/team-lead/project-template.md`: what `team-lead` writes into a new project as
-  `.claude/ai-team-project.md`.
-- `skills/team-lead/default-git-workflow.md`: the procedure for the default git workflow (start, deliver, stop,
-  resume). `team-lead` reads it only where a project does not replace the workflow with its own.
+- `skills/team-lead/project-initiation.md` and `project-template.md`: what `team-lead` does and writes on its
+  first run in a project. It asks how the project works with git, and how a new worktree gets its environment.
+- `skills/team-lead/git-workflow-worktree.md` and `git-workflow-in-place.md`: the procedures for the two git
+  workflows. `team-lead` reads only the one a feature uses, and neither where a project replaces the workflow
+  with its own.
 - `agents/`: three agent types that fix which tools a skill gets. Every skill except `team-lead` and
   `product-manager` runs as one of them.
   - `ai-team-author`: file tools and no shell. Used by `copywriter`, `ui-designer` and `system-architect`.
@@ -47,7 +51,7 @@ and merge.
 ## Where the live copy is
 
 Claude Code reads skills from `~/.claude/skills/` and agent types from `~/.claude/agents/`. This repository holds a
-copy of those files. Changes are made in `~/.claude` and then saved here.
+copy of those files. Changes are made here, tested, and then installed there.
 
 `sync.ps1` touches only the skills and agent types named in `team.json`. It never reads or copies anything else in
 `~/.claude`, such as other skills, credentials or transcripts.
@@ -70,31 +74,34 @@ cd claude-ai-team
 pwsh ./sync.ps1 install
 ```
 
-Then, in any project, start a feature with `/team-lead <request>`. On its first run in a project `team-lead`
-creates the project file, imports it from the project's `CLAUDE.md` and adds `.ai-team/` to `.gitignore`. The
-project must be a git repository; `team-lead` creates one if needed.
+Then, in any project, start a feature with `/team-lead <description>` or `/team-lead <issue number>`. On its first
+run in a project `team-lead` asks how the project works with git, creates the project file, imports it from the
+project's `CLAUDE.md` and adds `.ai-team/` and `.claude/worktrees/` to `.gitignore`. The project must be a git
+repository; `team-lead` creates one if needed.
 
 `install` overwrites the team's files in `~/.claude` with the ones from this repository. It does not delete
 anything: a file that is in `~/.claude` but not here is reported and left in place.
 
-## Save a change
+## Change the team
 
-After a skill, an agent type or the rules change in `~/.claude`:
+A file in `~/.claude` is live at once in every project, including for features that are in flight. So a change is
+made and tested here first, and installed last:
 
-```
-pwsh ./sync.ps1 check
-pwsh ./sync.ps1 save
-git status
-```
+1. Make a branch in this repository and edit the files here.
+2. Test without installing. Copy the changed skill folder into a scratch project as
+   `.claude/skills/<name>-next/`, give it that name in its `SKILL.md`, and run it there with `claude -p`. A
+   project-level skill is seen only by that project. Its rules file is the copy in that folder, so the agents it
+   dispatches follow the proposed rules too.
+3. Run `pwsh ./sync.ps1 check` to see what `install` would change, then `pwsh ./sync.ps1 install`.
+4. Commit, merge and push.
 
-`check` lists the files that differ and changes nothing. `save` copies them here, and removes from this repository
-any team file that no longer exists in `~/.claude`. Then commit and push.
+Keep ledgers and handoffs that already exist readable: when a format changes, say in the rules how the old form
+is read. When the rules change, raise `Pipeline Version` in `ai-team-pipeline.md`. Each ledger records the version
+its feature started under.
 
-A change in `~/.claude` is live at once in every project, including for features that are in flight. Keep ledgers
-and handoffs that already exist readable: when a format changes, say in the rules how the old form is read.
-
-When the rules change, raise `Pipeline Version` in `ai-team-pipeline.md`. Each ledger records the version its
-feature started under.
+`pwsh ./sync.ps1 save` copies the other way, from `~/.claude` into this repository, and removes here any team file
+that no longer exists there. Use it only to pick up an edit that was made directly in `~/.claude`. On a branch
+with changes that are not installed yet it would overwrite them.
 
 ## Updating an older project
 

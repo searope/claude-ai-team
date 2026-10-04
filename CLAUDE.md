@@ -21,10 +21,14 @@ team and to explore ways to improve and extend it.
 
 ## Where edits go
 
-The live copies are in `~/.claude/skills` and `~/.claude/agents`. Edit them there, then run `pwsh ./sync.ps1 save`
-and commit. When the pipeline rules change, raise `Pipeline Version`. When a skill changes, raise its
-`metadata.version`.
+The live copies are in `~/.claude/skills` and `~/.claude/agents`. A file there takes effect at once in every
+project that uses the team, including features in flight, and projects hold no copy of the rules. So do not edit
+the live copies. Follow "Change the team" in `README.md`:
 
-An edit to a live copy takes effect at once in every project that uses the team, including features in flight.
-Projects hold no copy of the rules. Keep existing ledgers and handoffs readable, and test before telling the user
-a change is ready.
+1. Edit the files in this repository, on a branch.
+2. Test them in a scratch project as a project-level skill under another name, with headless `claude -p` runs.
+3. Install with `pwsh ./sync.ps1 install` only when the user has agreed to go live.
+4. Never run `pwsh ./sync.ps1 save` on a branch with changes that are not installed: it overwrites them.
+
+When the pipeline rules change, raise `Pipeline Version`. When a skill changes, raise its `metadata.version`. Keep
+existing ledgers and handoffs readable.

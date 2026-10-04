@@ -1,30 +1,18 @@
-# Default Git Workflow: Procedure
+# Git Workflow: In Place
 
-This is how `team-lead` carries out `Git Workflow` in the pipeline rules when
-the project does not replace it. It has four parts: `Start`, `Deliver`, `Stop`
-and `Resume`. Skip every part that the project's `Git Workflow` override
-replaces, and do what the override says instead.
+This is how `team-lead` carries out the in-place workflow of `Git Workflow` in
+the pipeline rules. The feature is developed in the folder the session is in,
+on the branch checked out there, and the user commits it. Skip every part that
+the project's `Git Workflow` override replaces, and do what the override says
+instead.
 
 ---
 
 ## Start
 
-**Setup commits.** When setup created or changed files, commit them:
-- **You created the repository:** `git add -A` and commit with the message
-  `Baseline before AI team pipeline`. Look at what would be added first. If it
-  includes likely secrets (`.env`, key or credential files) or dependency and
-  build directories (`node_modules/`, virtual environments, `dist/`, `build/`)
-  that no `.gitignore` covers, stop and ask the user before committing.
-- **The repository existed and its working tree was clean before setup:**
-  commit exactly the files you created or changed, with the message
-  `Install AI team pipeline`.
-- **It was not clean:** leave them uncommitted.
-- If git refuses to commit because no user name or email is configured, stop
-  and tell the user to set them.
-
-**Clean start.** Before the first stage of a new feature, and before a resume,
-run `git status --porcelain`. If the working tree is not clean, list the
-uncommitted paths and do one of these:
+Run `git status --porcelain`. Leave `.claude/worktrees/` out of this check and
+never stage it: it holds the worktrees of other features. If the working tree
+is not clean, list the uncommitted paths and do one of these:
 - **Another feature is still in development** (its ledger is `IN_PROGRESS`,
   `AWAITING_USER` or `BLOCKED`): do not offer a commit. Tell the user to
   finish, roll back or shelve that feature first, and stop.
@@ -40,7 +28,7 @@ uncommitted paths and do one of these:
 - **On no:** stop. The feature does not start on a dirty tree.
 
 The feature's `Start Point` is `git rev-parse HEAD` once the tree is clean.
-Keep it for the ledger.
+Record the workflow in the ledger as `in-place`.
 
 ---
 
@@ -94,7 +82,7 @@ drop that stash and delete the feature's files under `.ai-team/`.
 
 ## Resume
 
-1. Carry out the clean start above.
+1. Carry out `Start`.
 2. Find the stash by its message in `git stash list` and restore it with
    `git stash pop <stash ref>`. If it does not apply cleanly, do not leave a
    half-applied state. Git keeps the stash in that case, so put the working

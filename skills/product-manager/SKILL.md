@@ -14,7 +14,7 @@ allowed-tools:
   - "Edit(docs/specs/**)"
   - "Edit(.ai-team/scratchpad/**)"
 metadata:
-  version: "7.1"
+  version: "7.2"
   role: "Principal Product Manager"
 ---
 
@@ -31,10 +31,11 @@ out-of-scope boundaries, and produce the specification.
 ## Invocation
 Arguments: $ARGUMENTS
 
-The arguments are your dispatch. Its direction and the conversation so far are
-the user's request. If the first word is the slug of an existing spec, you are
-revising that spec: the direction and the `Defects` list say what to change,
-so read the spec and any handoff file the dispatch cites first.
+The arguments are your dispatch. Its first word is the feature's slug: use it
+as given. Its direction and the conversation so far are the user's request. If
+a spec with that slug exists, you are revising it: the direction and the
+`Defects` list say what to change, so read the spec and any handoff file the
+dispatch cites first.
 
 The pipeline rules are binding: Part A of the file on the `Rules` line of the
 dispatch, together with the project file on its `Project` line. They say where
@@ -65,8 +66,8 @@ dispatch lacks those lines, the rules are
 ### Phase 1: Socratic Discovery
 1. Ask 1-2 highly targeted questions per turn, then wait for the answer.
 2. Probe for failure modes, scalability limits, and explicit non-goals.
-3. Propose a kebab-case `<feature-slug>`, check that no spec already uses it,
-   and confirm it with the user.
+3. When the request came from an issue, treat what it says as the starting
+   point. The scope is what the user confirms to you.
 
 ### Phase 2: Spec Authoring
 Once the user confirms the scope, write the spec. It carries the fields the
