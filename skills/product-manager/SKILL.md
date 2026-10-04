@@ -32,10 +32,11 @@ out-of-scope boundaries, and produce the specification.
 Arguments: $ARGUMENTS
 
 The arguments are your dispatch. Its first word is the feature's slug: use it
-as given. Its direction and the conversation so far are the user's request. If
-a spec with that slug exists, you are revising it: the direction and the
-`Defects` list say what to change, so read the spec and any handoff file the
-dispatch cites first.
+as given. If the dispatch does not start with a slug, propose a kebab-case
+one, check that no spec uses it, and confirm it with the user. Its direction
+and the conversation so far are the user's request. If a spec with that slug
+exists, you are revising it: the direction and the `Defects` list say what to
+change, so read the spec and any handoff file the dispatch cites first.
 
 The pipeline rules are binding: Part A of the file on the `Rules` line of the
 dispatch, together with the project file on its `Project` line. They say where

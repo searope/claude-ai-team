@@ -187,8 +187,9 @@ For an existing feature, read what exists, each by its exact path (rules:
 `Artifact Topology`):
 - the ledger. It names the feature's workflow: `Read` that workflow's
   procedure, unless the project's `Git Workflow` override replaces all of it.
-  A ledger with no `Workflow` line is in place, unless that override says
-  where features are developed;
+  A ledger with no `Workflow` line belongs to a feature that started under an
+  earlier version. Carry on with it as before, in place or as the project's
+  `Git Workflow` override says, and do not carry out `Update` for it;
 - the spec and the ADR, and note which of the copy file, the copy audit and
   the UI spec exist;
 - the handoff of each role, one path per role. Never use a wildcard after the
