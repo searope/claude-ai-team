@@ -8,12 +8,17 @@ and merge.
 
 - A **skill** describes one role's work: what it reads, what it produces and its quality bar. It does not name the
   other roles or the order of the stages, and it cannot be used without the pipeline rules.
-- An **agent type** fixes the tools of an isolated agent and tells it to read Part A of the pipeline rules.
-- The **pipeline rules** are the only place where the roles are tied together. Part A binds every agent: paths,
-  write areas, the fields each artifact must carry, and how an agent is dispatched and reports. Part B is the
-  orchestration: stage order, the design gate, routing and stopping.
-- `team-lead` is the only skill that knows the whole picture. An agent that is stuck names the area it is blocked
-  on, and `team-lead` finds the owner.
+- An **agent type** fixes the tools of an isolated agent and tells it to read the two files its dispatch names:
+  the pipeline rules and the project file.
+- The **pipeline rules** are the only place where the roles are tied together. Part A binds every agent: write
+  areas, the fields each artifact must carry, and how an agent is dispatched and reports. Part B is the
+  orchestration: stage order, the design gate, routing and the git workflow. There is one copy of the rules, next
+  to `team-lead`. Every project reads it from there, so the rules and the skills can never be at different
+  versions.
+- A **project file**, `.claude/ai-team-project.md`, is all a project holds: its source, test and infra paths, and
+  its overrides of the rules.
+- `team-lead` is the only skill that knows the whole picture. It carries out the rules and does not repeat them.
+  An agent that is stuck names the area it is blocked on, and `team-lead` finds the owner.
 
 ## What is here
 
@@ -23,8 +28,12 @@ and merge.
     the ADR.
   - `software-engineer`, `devops-engineer`, `test-engineer`: write the code, the infra and the tests.
   - `security-reviewer`: audits the change record that `team-lead` takes from git. It is read-only.
-- `skills/team-lead/ai-team-pipeline.md`: the master copy of the pipeline rules. `team-lead` installs a copy into
-  each project as `.claude/ai-team-pipeline.md`, where the project sets its own paths and overrides.
+- `skills/team-lead/ai-team-pipeline.md`: the pipeline rules. This is the only copy; nothing installs it into a
+  project.
+- `skills/team-lead/project-template.md`: what `team-lead` writes into a new project as
+  `.claude/ai-team-project.md`.
+- `skills/team-lead/default-git-workflow.md`: the procedure for the default git workflow (start, deliver, stop,
+  resume). `team-lead` reads it only where a project does not replace the workflow with its own.
 - `agents/`: three agent types that fix which tools a skill gets. Every skill except `team-lead` and
   `product-manager` runs as one of them.
   - `ai-team-author`: file tools and no shell. Used by `copywriter`, `ui-designer` and `system-architect`.
@@ -62,15 +71,15 @@ pwsh ./sync.ps1 install
 ```
 
 Then, in any project, start a feature with `/team-lead <request>`. On its first run in a project `team-lead`
-installs the pipeline rules and adds the import line to the project's `CLAUDE.md`. The project must be a git
-repository; `team-lead` creates one if needed.
+creates the project file, imports it from the project's `CLAUDE.md` and adds `.ai-team/` to `.gitignore`. The
+project must be a git repository; `team-lead` creates one if needed.
 
 `install` overwrites the team's files in `~/.claude` with the ones from this repository. It does not delete
 anything: a file that is in `~/.claude` but not here is reported and left in place.
 
 ## Save a change
 
-After a skill, an agent type or the master rules change in `~/.claude`:
+After a skill, an agent type or the rules change in `~/.claude`:
 
 ```
 pwsh ./sync.ps1 check
@@ -81,8 +90,22 @@ git status
 `check` lists the files that differ and changes nothing. `save` copies them here, and removes from this repository
 any team file that no longer exists in `~/.claude`. Then commit and push.
 
-When the master rules change, raise `Pipeline Version` in `ai-team-pipeline.md`. `team-lead` compares it with each
-project's copy and reports a mismatch.
+A change in `~/.claude` is live at once in every project, including for features that are in flight. Keep ledgers
+and handoffs that already exist readable: when a format changes, say in the rules how the old form is read.
+
+When the rules change, raise `Pipeline Version` in `ai-team-pipeline.md`. Each ledger records the version its
+feature started under.
+
+## Updating an older project
+
+A project set up before version 5.0 holds a full copy of the old rules at `.claude/ai-team-pipeline.md`. It keeps
+working as it is: `team-lead` uses that file as the project file, and only its `Project Paths` and
+`Overrides for this project` count. To slim it down:
+
+1. Create `.claude/ai-team-project.md` from `skills/team-lead/project-template.md`.
+2. Move the project's `Project Paths` and `Overrides for this project` into it.
+3. In `CLAUDE.md`, import the new file in place of the old one.
+4. Delete `.claude/ai-team-pipeline.md`.
 
 ## Adding a role
 

@@ -1,8 +1,8 @@
 # Claude AI team
 
 This repository is the saved copy of the AI team: the skills and agent types named in `team.json`, the pipeline
-rules in `skills/team-lead/ai-team-pipeline.md`, and `sync.ps1`. Sessions here exist to maintain the team and to
-explore ways to improve and extend it.
+rules and the project-file template in `skills/team-lead/`, and `sync.ps1`. Sessions here exist to maintain the
+team and to explore ways to improve and extend it.
 
 ## Scope
 
@@ -24,3 +24,7 @@ explore ways to improve and extend it.
 The live copies are in `~/.claude/skills` and `~/.claude/agents`. Edit them there, then run `pwsh ./sync.ps1 save`
 and commit. When the pipeline rules change, raise `Pipeline Version`. When a skill changes, raise its
 `metadata.version`.
+
+An edit to a live copy takes effect at once in every project that uses the team, including features in flight.
+Projects hold no copy of the rules. Keep existing ledgers and handoffs readable, and test before telling the user
+a change is ready.

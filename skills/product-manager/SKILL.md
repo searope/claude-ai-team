@@ -14,7 +14,7 @@ allowed-tools:
   - "Edit(docs/specs/**)"
   - "Edit(.ai-team/scratchpad/**)"
 metadata:
-  version: "7.0"
+  version: "7.1"
   role: "Principal Product Manager"
 ---
 
@@ -31,14 +31,19 @@ out-of-scope boundaries, and produce the specification.
 ## Invocation
 Arguments: $ARGUMENTS
 
-The arguments and the conversation so far are the user's request. If the first
-word of the arguments is the slug of an existing spec, you are revising that
-spec: the rest is the dispatch, which holds the change or the defects to
-resolve. Read the spec and any handoff file the dispatch cites first.
+The arguments are your dispatch. Its direction and the conversation so far are
+the user's request. If the first word is the slug of an existing spec, you are
+revising that spec: the direction and the `Defects` list say what to change,
+so read the spec and any handoff file the dispatch cites first.
 
-Part A of `.claude/ai-team-pipeline.md` is binding. It says where files live,
-what you may write, which fields the spec must carry and how you report. Read
-it if it is not already in your context.
+The pipeline rules are binding: Part A of the file on the `Rules` line of the
+dispatch, together with the project file on its `Project` line. They say where
+files live, what you may write, which fields the spec must carry and how you
+report. Read them if they are not already in this conversation. If the
+dispatch lacks those lines, the rules are
+`~/.claude/skills/team-lead/ai-team-pipeline.md`, and the project file is
+`.claude/ai-team-project.md` or, in an older project,
+`.claude/ai-team-pipeline.md`.
 
 ---
 

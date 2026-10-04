@@ -1,35 +1,41 @@
 # AI Team Pipeline
 
-**Pipeline Version:** 4.0
+**Pipeline Version:** 5.0
 
-Feature work in this project runs through a 9-stage pipeline operated by nine
-skills. This file is the only place where the stages, the artifacts and the
-agents are tied together. A skill describes one role's work and nothing about
-the other roles.
+Feature work runs through a 9-stage pipeline operated by nine skills. This file
+is the only place where the stages, the artifacts and the agents are tied
+together. A skill describes one role's work and nothing about the other roles.
+
+These rules ship with the `team-lead` skill and are read from there. They are
+never copied into a project, so a change to them applies to every project at
+once. A project holds only its own project file: its paths and its overrides
+(A1).
 
 - **Part A** binds every pipeline agent: where files live, who may write what,
   what each artifact must contain, and how an agent is dispatched and reports.
 - **Part B** binds `team-lead` and the main conversation: when the pipeline
-  applies, the order of the stages, the design gate, routing and stopping.
-
-This file lives at `.claude/ai-team-pipeline.md` and is imported from the
-project `CLAUDE.md`. Its master copy ships with the `team-lead` skill, which
-installs it and reports when the project copy falls behind.
+  applies, the order of the stages, the design gate, routing and the git
+  workflow.
 
 ---
 
 # Part A: Rules for Every Agent
 
-## A1. Project Paths
+## A1. The Project File
 
-Edit this block to match the project. Agents use it to tell write areas apart.
+Each project has one file of its own, `.claude/ai-team-project.md`, imported
+from the project `CLAUDE.md`. `team-lead` creates it on its first run in a
+project and never overwrites it. Every dispatch names it (A5). It holds:
 
-- **Source:** `src/`, `lib/`, `app/` (includes design-token, theme and locale
-  files)
-- **Tests:** `tests/`, plus colocated test files (`*_test.*`, `*.test.*`,
-  `*.spec.*`)
-- **Infra:** `Dockerfile*`, `docker-compose*`, `.github/`, other CI config,
-  IaC, `migrations/`
+- **Project Paths:** which paths are `Source`, `Tests` and `Infra` in this
+  project. Agents use them to tell write areas apart (A2).
+- **Overrides for this project:** the project's own rules (A6).
+
+**Older projects.** A project set up before version 5.0 has a full copy of an
+older version of these rules at `.claude/ai-team-pipeline.md`. That file is
+then its project file, and only two blocks of it count: `Project Paths` and
+`Overrides for this project`. The rest of it is out of date; ignore it and
+follow these rules.
 
 ---
 
@@ -44,9 +50,9 @@ the names an agent uses to say what it is blocked on (A5).
 | `Copy` | `docs/copy/` | `copywriter` | |
 | `UI spec` | `docs/design/` | `ui-designer` | |
 | `ADR` | `docs/adr/` | `system-architect` | |
-| `Source` | Source paths (A1) | `software-engineer` | Files in the ADR's `Allowed Blast Radius (Source)` |
-| `Tests` | Test paths (A1) | `test-engineer` | Never production code |
-| `Infra` | Infra paths (A1) | `devops-engineer` | Files in the ADR's `Allowed Blast Radius (Infra)` |
+| `Source` | Source paths of the project file | `software-engineer` | Files in the ADR's `Allowed Blast Radius (Source)` |
+| `Tests` | Test paths of the project file | `test-engineer` | Never production code |
+| `Infra` | Infra paths of the project file | `devops-engineer` | Files in the ADR's `Allowed Blast Radius (Infra)` |
 | State | `.ai-team/state/`, the change record | `team-lead` | |
 | Handoff | `.ai-team/scratchpad/<feature-slug>-<role>-context.md` | The agent with that role | Own file only |
 
@@ -62,12 +68,11 @@ the names an agent uses to say what it is blocked on (A5).
 - An agent that finds a problem in another area does not fix it. It reports
   `ESCALATE` (A5).
 - Only `team-lead` dispatches agents. Agents do not invoke pipeline skills.
-- No agent commits, pushes or merges feature work. The user does that after
-  `READY_FOR_MERGE`. The only commits an agent makes are `team-lead`'s setup
-  commits on the first run (the baseline and the pipeline install) and a
-  checkpoint commit the user agreed to before a feature starts.
+- Only `team-lead` runs git commands that change the repository, and only
+  those the git workflow gives it (B5). No other agent commits, pushes,
+  merges, stashes or resets.
 - Nothing is deleted or stashed except by `team-lead`, and only after the user
-  chooses how to stop a feature (B5).
+  has chosen how to stop a feature (B5).
 
 ---
 
@@ -78,31 +83,30 @@ specs or state.
 
 ```text
 .
-+-- CLAUDE.md                                   # imports the file below
++-- CLAUDE.md                                   # imports the project file
 +-- .claude/
-|   +-- ai-team-pipeline.md                     # this file
+|   +-- ai-team-project.md                      # project file (A1)
 +-- docs/
 |   +-- specs/<feature-slug>.md                 # spec
 |   +-- copy/<feature-slug>-copy.md             # copy: new text
 |   +-- copy/<feature-slug>-copy-audit.md       # copy audit: old -> new rewrites
 |   +-- design/<feature-slug>-ui-spec.md        # UI spec
 |   +-- adr/<feature-slug>-adr.md               # ADR
-+-- .ai-team/
++-- .ai-team/                                   # working files, ignored by git
     +-- state/<feature-slug>-pipeline.md        # ledger (team-lead)
-    +-- state/rejected-features.md              # shelved features (team-lead)
     +-- scratchpad/
         +-- <feature-slug>-<role>-context.md    # one handoff per agent
         +-- <feature-slug>-changes.md           # change record (team-lead)
 ```
 
-- `<feature-slug>` is kebab-case and fixed when the spec is first written. It
-  is the first word of every dispatch.
+- `<feature-slug>` is kebab-case. It is fixed no later than when the spec is
+  first written, and it never changes.
 - `<role>` is one of: `pm`, `copy`, `ui`, `arch`, `dev`, `devops`, `test`,
   `security`.
 - The ledger is `team-lead`'s own record. No other agent reads it: what an
   agent needs from it arrives in the dispatch (A5).
-- Working files live in `.ai-team/`, not `.claude/`, because Claude Code asks
-  for approval on every write under `.claude/`.
+- `.ai-team/` holds working files and is listed in `.gitignore`. The design
+  artifacts under `docs/` are part of the feature and are committed with it.
 
 ---
 
@@ -155,9 +159,8 @@ artifact contains is its owner's business.
 
 **Change record**
 - The output of `git status --porcelain` followed by `git diff <Start Point>`,
-  written by `team-lead` before the security review. A feature starts from a
-  clean working tree, so every path in it is part of the feature. New files
-  appear only in the status list, not in the diff.
+  written by `team-lead` before the security review. Every path in it is part
+  of the feature. New files appear only in the status list, not in the diff.
 
 ---
 
@@ -167,14 +170,28 @@ artifact contains is its owner's business.
 
 ```text
 <feature-slug> [direction]
+Stage: <number and name of the stage in the Routing Table>
 Round: <n>
+Rules: <path of this file>
+Project: <path of the project file>
 Defects:
 - <area>: <one line> (<handoff file that describes it>)
 Fast Path: <the request>
 Files: <paths that may change>
 ```
 
-- Only the slug is always present. With no `Round` line the round is 0.
+- `team-lead` always sends the first five lines. An agent whose dispatch lacks
+  one of them does not stop; it falls back. No `Round` line means round 0. No
+  `Stage` line means the agent's own stage in the Routing Table (B2). No
+  `Rules` or `Project` line means that file's usual place.
+- The slug is the first word, except in the dispatch that starts a new feature
+  whose slug is not fixed yet: there the first line is the user's request.
+- `direction` is what the user or `team-lead` asks for in this run. On a re-run
+  after another area changed, it says what changed and where that is
+  described.
+- `Stage` says which stage the agent is running. Where the project file gives
+  a gate or a note for a numbered stage, this is how the agent knows which
+  ones are its own.
 - `Defects` appears on defect work. Fix those defects and change nothing else.
 - `Fast Path` and `Files` appear only on a project fast path (A6), where there
   is no spec or ADR. The request stands in for the Acceptance Criteria, and
@@ -220,30 +237,27 @@ whatever its skill adds.
 
 ## A6. Project Overrides
 
-This section is empty in the master copy. A project fills it in, in its own
-copy, to replace defaults with its own rules. A rule written here wins over the
-matching default in this file and in the skills. Everything it does not
-mention stays as written.
+A project replaces defaults with its own rules in the
+`Overrides for this project` block of its project file. A rule written there
+wins over the matching default in these rules and in the skills. Everything it
+does not mention stays as written.
 
 Overrides may cover:
 - **Gates** (every agent): the commands that must pass before a stage may
   report `DONE`.
 - **Stage Notes** (every agent): project facts a stage must respect.
-- **Git Workflow** (`team-lead`): where a feature is developed, who commits,
-  and how a finished feature is delivered. It replaces the clean-start rule,
-  the rule that `team-lead` makes no feature commits, Stage 9, and the
-  mechanics of rollback, shelve and resume.
+- **Git Workflow** (`team-lead`): any part of B5: where a feature is developed,
+  who commits, how a finished feature is delivered, and how one is rolled
+  back, shelved and resumed.
 - **Fast Path** (`team-lead`): which changes may skip stages, and which stages
   they skip. On a fast path there is no spec or ADR. `team-lead` records the
   request and the files that may change in the ledger and passes them in every
   dispatch (A5).
 
 Overrides may not relax Write Isolation (A2), the design gate for a feature
-that runs Stage 4 (B3), the handoff block (A5), or the rule that the user
-chooses how a feature is stopped and confirms before anything is deleted (B5).
-
-### Overrides for this project
-- None.
+that runs the Architecture stage (B3), the handoff block (A5), or the rule
+that the user chooses how a feature is stopped and confirms before anything is
+deleted (B5).
 
 ---
 
@@ -251,15 +265,6 @@ chooses how a feature is stopped and confirms before anything is deleted (B5).
 
 ## B1. Scope and Prerequisites
 
-- **Git is required.** The project must be a git repository. On its first run
-  `team-lead` creates one if needed and commits a baseline, so that every
-  feature has a known starting state to return to.
-- **One feature at a time.** A feature starts only from a clean working tree
-  (paths under `.ai-team/` are ignored). `team-lead` records the commit it
-  started from as the feature's `Start Point`. Commit a finished feature before
-  starting the next one. If the tree is not clean, `team-lead` lists the
-  uncommitted paths and offers to commit them as a checkpoint; it starts the
-  feature only after that commit, or after the user has cleaned up.
 - **In scope:** new features and behaviour-changing fixes. Start them with
   `/team-lead <feature idea or feature-slug>`. Do not write code, tests or
   infrastructure for in-scope work outside the pipeline.
@@ -268,8 +273,12 @@ chooses how a feature is stopped and confirms before anything is deleted (B5).
   pipeline, is done directly in the main conversation.
 - **Not gated:** questions, code reading, exploration and reviews that change
   no files.
-- **Project overrides:** a project may replace the git rules and the fast
-  path above with its own (A6).
+- **Git is required.** The project must be a git repository; `team-lead`
+  creates one on its first run if needed. Every feature has a `Start Point`,
+  the commit it started from, and the security review audits what changed
+  since then.
+- **Project overrides:** a project may replace the fast path and the git
+  workflow with its own (A6).
 
 ---
 
@@ -289,28 +298,35 @@ chooses how a feature is stopped and confirms before anything is deleted (B5).
 | **8. Security** | `security-reviewer` | Always | Everything above, change record | `PASS` / `BLOCK` |
 | **9. Merge** | `team-lead` | Security `PASS` in the current round | Ledger | `READY_FOR_MERGE` |
 
-- A stage that does not run is recorded as `SKIPPED` in the ledger.
-- **Stage 1 runs in the main conversation**, because it is a dialogue with the
-  user. When the `pm` handoff reports `DONE`, `team-lead` continues the feature
-  in the same turn. If it does not, run `/team-lead <feature-slug>`.
-- **Before Stage 8** `team-lead` writes the change record (A4).
-- **Rounds.** `Round` starts at 0 and increases by 1 on every backward route.
-  A `PENDING` stage is completed only by a handoff whose `Round` equals the
-  ledger's current `Round`; older handoffs are stale. A stage that is `DONE` in
-  the ledger stays `DONE` until a backward route resets it.
+- A stage that does not run is recorded as `SKIPPED` in the ledger. `team-lead`
+  decides this from the `Runs when` column, and decides again whenever the
+  artifact that column reads is rewritten.
+- **Discovery runs in the main conversation**, because it is a dialogue with
+  the user. When its handoff reports `DONE`, `team-lead` continues the feature
+  in the same turn. If it does not, run `/team-lead <feature-slug>`. Every
+  other agent stage runs isolated.
+- **Before Security** `team-lead` writes the change record (A4).
+- **Merge** is `team-lead` carrying out `Deliver` of the git workflow (B5).
+- **Rounds.** `Round` starts at 0. It increases by 1 on every backward route,
+  and when the user unblocks a stage (B4). A `PENDING` stage is completed only
+  by a handoff whose `Round` equals the ledger's current `Round`; older
+  handoffs are stale. A stage that is `DONE` in the ledger stays `DONE` until
+  a backward route resets it.
 
 ---
 
 ## B3. Design Gate
 
-After Stage 4, `team-lead` summarises the spec, copy, UI spec and ADR and waits
-for the user's approval before Stage 5 starts. The user answers with an
+The design gate sits after Architecture. The stages before it are the design
+stages; the stages after it are the build stages. When the design stages are
+done, `team-lead` summarises the spec, copy, UI spec and ADR and waits for the
+user's approval. No build stage starts without it. The user answers with an
 approval, a change request, or a stop (B5).
 
 - **Approval is tied to a design.** `team-lead` records the spec and ADR
-  `Revision` numbers the approval was given for. Any backward route to Stages
-  1-4 sets the gate back to `PENDING`. The user approves again, seeing what
-  changed, before Stage 5 resumes.
+  `Revision` numbers the approval was given for. Any backward route to a design
+  stage sets the gate back to `PENDING`. The user approves again, seeing what
+  changed, before a build stage runs.
 - **Change requests:** only while the gate is open. The user asks with
   `/team-lead <feature-slug> <change>`. It is a backward route to the owner of
   the affected artifact and does not count toward the loop cap (B4).
@@ -323,50 +339,69 @@ approval, a change request, or a stop (B5).
 
 1. **Owner.** `team-lead` routes each `Blocked On` area to the owner of that
    area in the Write Isolation table (A2).
-2. **Test failure (Stage 7 -> 5 or 6):** `test-engineer` reports `DEFECTS`
-   blocked on `Source` or `Infra`. Tests are never weakened to pass.
-3. **Security block (Stage 8 -> owners):** each blocker goes to the owner of
-   the area it names. A vacuous test (one that cannot fail whatever the code
-   does) and an AC or INV with no test are blockers on `Tests`, never
-   observations.
+2. **Test failure:** `test-engineer` reports `DEFECTS` blocked on `Source` or
+   `Infra`. Tests are never weakened to pass.
+3. **Security block:** each blocker goes to the owner of the area it names. A
+   vacuous test (one that cannot fail whatever the code does) and an AC or INV
+   with no test are blockers on `Tests`, never observations.
 4. **Re-run rule:** on every backward route `team-lead` increments `Round`. The
    stage routed to, and every later stage that is not `SKIPPED`, returns to
-   `PENDING` and runs again in order. A route to Stages 1-4 also re-opens the
-   design gate, and `team-lead` decides the conditional stages (2, 3, 6) again
+   `PENDING` and runs again in order. A route to a design stage also re-opens
+   the design gate (B3), and `team-lead` decides the conditional stages again
    from the revised spec and ADR.
 5. **Loop cap:** a feature gets at most 3 backward routes for test defects, 3
    for security blocks, and 5 for other escalations raised by agents. Changes
    the user requests at the design gate do not count. On the next counted
-   route, or when a handoff or blocker is blocked on `user`, `team-lead` sets
-   `BLOCKED` and asks the user. If the user says to continue, that counter
-   starts again at 0.
+   route `team-lead` sets `BLOCKED` and asks the user. If the user says to
+   continue, that counter starts again at 0.
+6. **Blocked on the user:** when a handoff or a blocker is blocked on `user`,
+   `team-lead` sets `BLOCKED` and asks. When the user has answered, blockers
+   on other areas are routed as above. If none remain, `team-lead` increments
+   `Round`, which makes the blocked handoff stale, and runs the blocked stage
+   again with the user's answer. That is not a backward route: no other stage
+   is reset, and it counts toward no cap.
 
 ---
 
-## B5. Stopping a Feature
+## B5. Git Workflow
 
-The user can stop a feature at any point: at the design gate, at any other
-stop, or after interrupting a stage that is still running. The command is
-`/team-lead <feature-slug> stop`. Both ways of stopping return the project to
-the state it was in when the feature started. `team-lead` never chooses for
-the user. It lists everything that differs from the feature's `Start Point`,
-taken from git, and asks:
+This is the default. A project may replace any part of it (A6). `team-lead`
+carries it out; no other agent runs git commands that change the repository.
+
+**Start.** One feature is in development at a time, in the project's working
+tree. A feature starts only from a clean working tree, and the commit it
+starts from is its `Start Point`. If the tree is not clean, `team-lead` lists
+the uncommitted paths and offers to commit them as a checkpoint; the feature
+starts only after that commit, or after the user has cleaned up. On its first
+run in a project `team-lead` also commits what it sets up: a baseline, if it
+had to create the repository, and the files it installs.
+
+**Deliver.** `team-lead` never commits the work of a feature. `READY_FOR_MERGE`
+means the security review passed and the work is in the working tree for the
+user to review and commit. The next feature can start only after that commit.
+
+**Stop.** The user can stop a feature at any point: at the design gate, at any
+other stop, or after interrupting a stage that is still running. The command
+is `/team-lead <feature-slug> stop`. `team-lead` never chooses for the user.
+It lists everything that differs from the feature's `Start Point`, taken from
+git, and asks:
 
 1. **Roll back:** all work done on the feature is deleted. Modified files go
    back to their last commit, and new files, the handoffs and the ledger are
    removed.
-2. **Shelve:** the work is kept in a git stash named `ai-team/<feature-slug>`
-   and the working tree goes back to the last commit. The ledger is set to
-   `REJECTED` and the feature gets a line in
-   `.ai-team/state/rejected-features.md`.
+2. **Shelve:** the work is kept in a git stash named `ai-team/<feature-slug>`,
+   the working tree goes back to the last commit, and the ledger is set to
+   `REJECTED`.
 
+- Both return the project to the state it was in when the feature started.
 - The list is built from git, so it includes the partial work of an
   interrupted stage and any edits the user made by hand since the feature
   started. A rollback discards those too.
 - Commits made after the `Start Point` are never undone by `team-lead`. It
   names them and leaves them to the user.
-- A shelved feature is ignored when `team-lead` looks for work to continue.
-  `/team-lead <feature-slug> resume` needs a clean working tree, restores the
-  stash, and re-opens the design gate. It never continues without a new
-  approval.
 - `git stash drop` or `git stash clear` destroys shelved work.
+
+**Resume.** `/team-lead <feature-slug> resume` needs a clean working tree and
+restores the stash. The design gate is `PENDING` again: no build stage runs
+without a new approval. A shelved feature is ignored when `team-lead` looks
+for work to continue.
