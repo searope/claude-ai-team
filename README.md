@@ -34,9 +34,7 @@ and merge.
 - `skills/team-lead/ai-team-pipeline.md`: the pipeline rules. This is the only copy; nothing installs it into a
   project.
 - `skills/team-lead/project-initiation.md` and `project-template.md`: what `team-lead` does and writes on its
-  first run in a project. It asks how the project works with git and what every new worktree should get from the
-  main folder, such as `.env` and dependency folders. For what is to be copied it writes `.worktreeinclude`, which
-  Claude Code reads when it creates a worktree.
+  first run in a project. It asks how the project works with git, and records how tools are run in a worktree.
 - `skills/team-lead/git-workflow-worktree.md` and `git-workflow-in-place.md`: the procedures for the two git
   workflows. `team-lead` reads only the one a feature uses, and neither where a project replaces the workflow
   with its own.

@@ -105,8 +105,7 @@ In the project:
   `.claude/ai-team-pipeline.md` (rules: `The Project File`).
 - **What you write:** the ledger, the change record and the `security` handoff
   (paths in the rules: `Artifact Topology`). At project initiation also the
-  project file, its import line, the `.gitignore` entries and
-  `.worktreeinclude`.
+  project file, its import line and the `.gitignore` entries.
 
 ---
 

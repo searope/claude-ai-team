@@ -32,11 +32,12 @@ project and never overwrites it. Every dispatch names it (A5). It holds:
 - **Git Workflow:** two settings for the git workflows (B5).
   - `Workflow` is the project's choice between them: `ask`, `worktree`,
     `in-place`, `worktree only` or `in-place only`.
-  - `Worktree setup` says what a new worktree gets beyond the files git
-    tracks, such as local configuration and dependency folders, and how tools
-    are to be run there. An agent that finds a tool or a dependency missing in
-    a worktree follows it before anything else. Doing so is not adding a
-    dependency.
+  - `Worktree setup` says how tools are run in a worktree. Nothing is copied
+    into a worktree: it has only the files git tracks, tools use the
+    environment of the project's main folder, and secret files stay in the
+    main folder. An agent that finds a tool or a dependency missing in a
+    worktree follows this line. If that does not help, it escalates, blocked
+    on `user`.
 - **Overrides for this project:** the project's own rules (A6).
 
 **Older projects.** A project file without a `Git Workflow` block is read as
@@ -83,9 +84,12 @@ the names an agent uses to say what it is blocked on (A5).
 - No agent opens, prints or copies a file that holds secrets, such as `.env`,
   a key or a credential file. Running a tool that reads one is allowed. Such
   a file is never staged or committed.
-- An agent runs every tool from the folder it was dispatched in. An
-  environment may point at another folder's code, and a tool run from
-  elsewhere would build or test that code instead.
+- An agent runs every tool from the root of the folder it was dispatched in,
+  in the way the project file says. The code it builds and tests must be that
+  folder's code. An environment shared with another folder may point at that
+  folder's code instead: in Python, a test file run as a script imports the
+  project from wherever it is installed, while a module run from the root
+  (`python -m ...`) imports it from the root.
 - Nothing is deleted or stashed except by `team-lead`, and only after the user
   has chosen how to stop a feature (B5). Generated files are the one
   exception: a file that a tool run created as a side effect (a cache,
@@ -103,7 +107,6 @@ specs or state.
 ```text
 .
 +-- CLAUDE.md                                   # imports the project file
-+-- .worktreeinclude                            # what a new worktree gets (A1)
 +-- .claude/
 |   +-- ai-team-project.md                      # project file (A1)
 +-- docs/
@@ -408,7 +411,7 @@ project may replace any part of either workflow (A6).
 | When the base branch moves | Nothing is done; the user deals with it when committing | `team-lead` merges the base branch into the feature's branch before each run of Testing |
 | `READY_FOR_MERGE` means | The review passed; the work is uncommitted in the folder | The review passed; the reviewed work is committed on the feature's branch |
 | What is left to the user | Review and commit; the next feature can start only after that | Merge the branch or push it, then remove the worktree |
-| Local setup | The folder's own | A worktree has only the files git tracks: see `Worktree setup` (A1) |
+| Local setup | The folder's own | Nothing is copied. A worktree has only the files git tracks, and tools use the main folder's environment: see `Worktree setup` (A1) |
 | Shelving a feature | The work goes into a git stash | The work stays on its branch, in its worktree |
 
 **Choosing.** For a new feature `team-lead` takes the first of these that
