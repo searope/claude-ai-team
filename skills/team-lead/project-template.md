@@ -42,6 +42,6 @@ in a worktree, which starts as a fresh checkout.
 
 A rule written here wins over the matching default in the pipeline rules and
 in the skills. The rules say what may be overridden: gates, stage notes, the
-git workflow and the fast path.
+git workflow, the fast path and the trivial lane.
 
 - None.

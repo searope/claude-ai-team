@@ -36,6 +36,13 @@ and merge.
   as what makes a test count, is in the Artifact Contracts of the rules and in neither skill.
 - A **project file**, `.claude/ai-team-project.md`, is all a project holds: its source, test and infra paths, its
   git workflow settings, its overrides of the rules, and a few lines that say when the pipeline applies.
+- A request takes one of three **lanes**. In full, it is a feature that runs through every stage. On a **fast
+  path** it is a feature that skips the stages the project names, as a rule the design stages. In the **trivial
+  lane** it is made directly in the conversation, with no stage and no review. The two lighter lanes exist only
+  where a project file defines them, with its own conditions. `team-lead` chooses the lane when a request starts
+  and says which condition decided it. The trivial lane also takes your word: you call the change trivial, or
+  you agree when `team-lead` asks. A change that outgrows a lighter lane stops there, and you choose how it goes
+  on.
 - A feature runs in one of two **git workflows**, chosen when it starts. In a **worktree**, the feature has a
   folder and a branch of its own, `team-lead` commits there, and several features can run at once. **In place**,
   features run one at a time in the folder you are in, and you commit them.
@@ -57,6 +64,9 @@ and merge.
 - `skills/team-lead/git-workflow-worktree.md` and `git-workflow-in-place.md`: the procedures for the two git
   workflows. `team-lead` reads only the one a feature uses, and neither where a project replaces the workflow
   with its own.
+- `skills/team-lead/lanes.md`: how `team-lead` chooses the lane of a new request, and how a request leaves a
+  lane that proves too light. It is read only in a project that defines a lighter lane, and for a request that
+  calls itself trivial.
 - `agents/`: three agent types that fix which tools a skill gets. Every skill except `team-lead` and
   `product-manager` runs as one of them.
   - `ai-team-author`: file tools and no shell. Used by `copywriter`, `ui-designer` and `system-architect`.
@@ -100,6 +110,29 @@ when the working tree was clean. The project must be a git repository; `team-lea
 
 `install` overwrites the team's files in `~/.claude` with the ones from this repository. It does not delete
 anything: a file that is in `~/.claude` but not here is reported and left in place.
+
+## Lighter lanes
+
+By default every request that reaches `team-lead` runs through all the stages. A project turns on a lighter lane
+by defining it under `Overrides for this project` in its project file:
+
+- **Fast Path:** which stages a small change skips, and the conditions it must meet. For example: a change of
+  text or style skips stages 1 to 4 and 6, when it touches at most three files and none of them is a schema or
+  a deploy file.
+- **Trivial Lane:** which changes are made directly, and what is still asked of such a change. For example: a
+  change of at most ten lines in one stylesheet, after which the tests are run once.
+
+`team-lead` holds each new request against these conditions and takes the lightest lane that fits. It never
+takes the trivial lane on its own judgement: when a request meets the conditions and you have not called it
+trivial, it asks. A request that asks for a lighter lane than the conditions allow does not take it:
+`team-lead` says which condition stands against it and asks whether to go on in the lane that fits. It moves
+such a change to that lane without asking only where the project's rule orders the move in so many words.
+
+A trivial change that proves bigger while it is made is undone and treated the same way. A fast-path stage
+that needs one more file gets it without a stop, as long as the conditions still hold with that file. When
+they do not, or when the request leaves open what a design stage would have settled, `team-lead` stops and
+offers three ways on: all the stages, staying on the fast path with your answer or a narrower change, or
+stopping the feature. A feature that moves to all the stages keeps what was built.
 
 ## Change the team
 

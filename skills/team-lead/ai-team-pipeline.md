@@ -1,6 +1,6 @@
 # AI Team Pipeline: Rules for Every Agent
 
-**Pipeline Version:** 7.2
+**Pipeline Version:** 7.3
 
 Feature work runs through a pipeline of stages. Each stage is the work of one
 skill, carried out by an agent that the orchestrator dispatches. The
@@ -9,9 +9,9 @@ orchestrator is the skill a user starts and continues a feature with.
 These rules bind every agent of the pipeline: what the project file tells it,
 what it may write, what each artifact must contain, and how it is dispatched
 and reports. They name no skill. Which skill carries out which stage, the
-order of the stages, the design gate, routing and the git workflow are the
-orchestrator's part. They are written in its own skill, the `SKILL.md` next to
-this file, and no other agent reads that.
+order of the stages, the lane a request takes, the design gate, routing and
+the git workflow are the orchestrator's part. They are written in its own
+skill, the `SKILL.md` next to this file, and no other agent reads that.
 
 An agent is started by a dispatch (§5). It reads these rules and the project
 file that the dispatch names, does the work its skill describes, writes its
@@ -388,8 +388,17 @@ Overrides may cover:
 - **Fast Path** (the orchestrator): which changes may skip stages, and which
   stages they skip. The orchestrator records the request and the files that
   may change, and passes them in every dispatch (§5).
+- **Trivial Lane** (the orchestrator): which changes are made directly in the
+  user's conversation, and how they are made and delivered there. Such a
+  change is no work of the pipeline: it has no stage and no dispatch, and
+  these rules, which bind agents, do not reach it.
+
+`Fast Path` and `Trivial Lane` are a project's lighter lanes. The
+orchestrator chooses the lane of each request by their conditions. A request
+that meets neither runs through all the stages.
 
 Overrides may not relax Write Isolation (§2), the rules for tools and the
 shell (§3), the handoff block (§5), the design gate of a feature that gets an
-ADR, or the rule that the user chooses how a feature is stopped and confirms
-before anything is deleted.
+ADR, the rule that the user chooses how a feature is stopped and confirms
+before anything is deleted, or the rule that a change takes the trivial lane
+only when the user has called it trivial or agreed to that lane.
