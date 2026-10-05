@@ -43,7 +43,7 @@ allowed-tools:
   - "PowerShell(git branch --list *)"
   - "PowerShell(gh issue view *)"
 metadata:
-  version: "10.2"
+  version: "10.3"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 
@@ -81,6 +81,8 @@ Arguments: $ARGUMENTS
     already chosen how.
   - `resume`: bring back a shelved feature.
   - `sync`: bring the feature's branch up to date with its base branch.
+  - `commit`, `merge` or `push`: a step that the workflow leaves to the
+    user, and that they now order (section 9).
 - **The first word is `worktree` or `in-place`:** a new feature, with its git
   workflow chosen. The rest is the request.
 - **Anything else:** a new feature. The request is a description, or an
@@ -161,9 +163,10 @@ In the project:
    read-only ones need no approval. The command that writes the change
    record is the one chained command.
 4. **GIT CHANGES ONLY AS THE WORKFLOW ALLOWS:** Make only the commits and
-   merges the feature's git workflow gives you. Never push, never merge into
-   the base branch, and never rebase, reset or rewrite history, unless the
-   project's git workflow tells you to.
+   merges the feature's git workflow gives you. Never push and never merge
+   into the base branch, unless the project's git workflow tells you to or
+   the user orders that step (section 9). Never rebase, reset or rewrite
+   history, unless the project's git workflow tells you to.
 5. **PROJECT OVERRIDES COME FIRST:** Where the project file sets a
    `Git Workflow` or a `Fast Path`, follow it in place of the defaults, within
    the limits that `Project Overrides` in the rules sets. An override can
@@ -556,6 +559,39 @@ override replaces a procedure:
 - **Deliver.** What you commit at delivery is exactly the paths the review
   audited. A path that changed after the review is a backward route to the
   review, and counts toward no cap.
+- **A step the user orders.** The workflow leaves the last steps to the
+  user: committing a feature that was delivered in place, merging a
+  delivered feature into the base branch, pushing it, opening or merging its
+  pull request. When the user orders one of these in so many words in this
+  conversation, carry it out for them. A project rule that keeps the step
+  for the user, such as `the owner merges`, is kept by this: they decide,
+  and you are their hand. A project rule that forbids you the step outright,
+  such as `team-lead never merges`, stands against the order too: do not
+  take the step, and tell the user that the rule is theirs to change in the
+  project file.
+  - **Only what the review passed.** The feature is `READY_FOR_MERGE` and
+    unchanged since delivery. In a worktree that means: the delivered commit
+    is the head of the branch, and nothing is uncommitted. In place:
+    `git status` and `git diff <Start Point>` still give what the change
+    record holds. Those git commands are the whole check.
+  - **Not ready:** say where the feature stands, and carry on with it as
+    usual. The order does not wait for it: when the feature is
+    `READY_FOR_MERGE`, the user orders the step again.
+  - **Changed since delivery:** what changed has not been reviewed. Do not
+    take the step. Set `BLOCKED` and give the user the ways on: take the
+    change out, or send it through the review again, which is a backward
+    route to the review.
+  - **Only what was ordered.** Delete no branch, remove no worktree and push
+    nothing along the way, unless the order or the project's git workflow
+    says so. Never force a push and never rewrite history for it.
+  - **How.** As the project's git workflow gives it. Where it gives
+    nothing: a commit in place has the message
+    `<feature-slug>: <the title of the spec>`, or on a fast path the request
+    in short; a merge is a plain merge, so that the base branch gets the
+    commits that were delivered; a pull request merge is pinned to the
+    delivered commit; a local merge runs in the folder where the base branch
+    is checked out, and only if that working tree is clean. Add the step and
+    the commit it made to `History`.
 - **Stop.** The user can stop a feature at any point, also after interrupting
   a stage that is still running. Never choose between a rollback and shelving
   for the user. Show what would be lost, taken from git: it includes the
@@ -573,6 +609,9 @@ The commands:
   usual. Section 4 opens the gate before any build stage runs.
 - **`sync`:** in the worktree workflow, carry out `Update`, then evaluate as
   usual. In place there is nothing to bring up to date: say so.
+- **`commit`, `merge`, `push`:** a step the user orders, as above. The same
+  order in other words, such as naming the pull request to merge, counts
+  as well.
 
 ### 10. Ask and report
 **Asking.** Wherever this skill or a workflow procedure has you ask the user
@@ -588,7 +627,8 @@ question unanswered, stop.
 **Reporting.** Whenever you stop, and before you ask, tell the user:
 - **Pipeline Stage:** the current stage and gate status.
 - **Since Last Stop:** which stages ran and what they produced.
-- **Needed From You:** the decision or approval you are waiting on, or what
-  `Deliver` asks of them when the state is `READY_FOR_MERGE`.
+- **Needed From You:** the decision or approval you are waiting on. When the
+  state is `READY_FOR_MERGE`: what `Deliver` leaves to them, and that they
+  can order that step from you (section 9).
 - **Notices:** anything from setup the user has not been told yet, and what
   the handoffs flagged.
