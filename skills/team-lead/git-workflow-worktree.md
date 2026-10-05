@@ -147,7 +147,7 @@ Build the list from git, not from handoffs:
   partial work of an interrupted stage included.
 - `git log --oneline <base>..HEAD`: the commits on the feature's branch.
 - The feature's working files under `.ai-team/`: its handoffs, its change
-  record and its ledger. Git ignores them, so name them yourself.
+  record, your notes and its ledger. Git ignores them, so name them yourself.
 - Warn that a rollback deletes all of these for good, and that the list may
   hold edits the user made by hand. A shelved feature keeps everything.
 
@@ -161,7 +161,8 @@ the list and get a confirmation first.
    path on the list.
 3. Leave the feature's branch and delete it: `git switch --detach <base>`,
    then `git branch -D agent/<feature-slug>`.
-4. Delete the feature's handoffs and change record, then its ledger.
+4. Delete the feature's handoffs, its change record and your notes, then its
+   ledger.
 5. Run `git status --porcelain` and confirm that nothing of the feature is
    left. Tell the user the worktree folder is still there and can be removed.
 

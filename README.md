@@ -30,8 +30,10 @@ and merge.
   writes the area.
 - Agents do not talk to each other. A stage builds on **artifacts** whose required fields the rules define, and
   reports to `team-lead` in a **handoff**. No agent reads another agent's handoff unless its dispatch cites it.
-  What two roles have to agree on, such as what makes a test count, is in the Artifact Contracts of the rules
-  and in neither skill.
+  A note for later stages has a fixed heading in the handoff, and `team-lead` names that handoff in the
+  dispatches that follow. What only `team-lead` knows, such as a decision the user made after the design was
+  approved, it writes into a notes file that the dispatches name as well. What two roles have to agree on, such
+  as what makes a test count, is in the Artifact Contracts of the rules and in neither skill.
 - A **project file**, `.claude/ai-team-project.md`, is all a project holds: its source, test and infra paths, its
   git workflow settings, its overrides of the rules, and a few lines that say when the pipeline applies.
 - A feature runs in one of two **git workflows**, chosen when it starts. In a **worktree**, the feature has a

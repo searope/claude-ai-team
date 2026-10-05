@@ -1,6 +1,6 @@
 # AI Team Pipeline: Rules for Every Agent
 
-**Pipeline Version:** 7.0
+**Pipeline Version:** 7.1
 
 Feature work runs through a pipeline of stages. Each stage is the work of one
 skill, carried out by an agent that the orchestrator dispatches. The
@@ -224,7 +224,7 @@ Stage: <number and name of the stage>
 Round: <n>
 Rules: <path of this file>
 Project: <path of the project file>
-Inputs: <paths of the feature's artifacts this stage builds on, or `none`>
+Inputs: <paths of the feature's artifacts this stage builds on and of the notes for it, or `none`>
 Handoff: <path of the handoff file to write>
 Defects:
 - <area>: <one line> (<handoff file that describes it>)
@@ -242,14 +242,20 @@ Files: <paths that may change>
   a gate or a note for a numbered stage, this is how the agent knows which
   ones are its own.
 - `Inputs` are the artifacts of this feature that the stage builds on. What
-  each of them holds is in §4. An agent may also read anything else in the
-  project that its work needs.
+  each of them holds is in §4. The line can also name notes: the handoff file
+  of another stage, or the orchestrator's own notes for the feature. In those
+  the agent reads the part under `## For Later Stages` (see Handoff). An agent
+  may also read anything else in the project that its work needs.
 - A stage whose own artifact already exists is revising it. It reads the
   artifact first, changes what the dispatch calls for and keeps the rest: keys
   and numbers stay as they are, and `Revision`, where the artifact has one,
   goes up by one.
-- `Defects` appears on defect work. Read the handoff file each defect cites,
-  fix those defects and change nothing else.
+- `Defects` are the items routed to the stage. Read the handoff file each one
+  cites, and resolve it. They come on top of the stage's work, not in place
+  of it: a stage that has not done its work for the feature yet does it in
+  this run, and so does a stage whose direction says that something it builds
+  on has changed. Work the stage has already done stays as it is, apart from
+  what the defects and the direction call for.
 - `Fast Path` and `Files` appear only on a project fast path (§6), where there
   is no spec or ADR. The request stands in for the Acceptance Criteria, and
   `Files` for the Allowed Blast Radius. There are no Invariants and no
@@ -275,7 +281,8 @@ area that has to change:
 - Only the user can decide or fix it: `user`.
 
 **Handoff.** Every agent ends by writing its handoff file: the block below,
-followed by whatever its skill adds. It returns the same text as its final
+followed by whatever its skill adds and, when it has notes for later stages,
+by a part headed `## For Later Stages`. It returns the same text as its final
 message. An agent that has no file-writing tools only returns it, and the
 orchestrator writes the file. A handoff is addressed to the orchestrator: no
 agent reads another agent's handoff unless its dispatch cites it.
@@ -293,7 +300,7 @@ agent reads another agent's handoff unless its dispatch cites it.
 | :--- | :--- |
 | `DONE` | The stage is complete. |
 | `ESCALATE` | The stage cannot be completed until what `Blocked On` names changes. |
-| `DEFECTS` | The stage's own work is complete, and it shows defects in what `Blocked On` names. |
+| `DEFECTS` | The stage's own work is complete, and it shows defects in what `Blocked On` names. With `user`: a finding that only the user can settle. |
 | `PASS` / `BLOCK` | The verdict of a review. On `BLOCK`, each blocker names its own area. |
 
 - A review reports `PASS` or `BLOCK` and nothing else. Every other stage
@@ -306,10 +313,28 @@ agent reads another agent's handoff unless its dispatch cites it.
   - A gate that fails only for a reason in another area, such as an existing
     test that pins behaviour the feature changes on purpose: `DEFECTS`,
     blocked on that area. The agent does not touch that area.
+- A stage can finish its work and still have found, in what the feature
+  changes, a flaw that no artifact rules out and that a user of the feature
+  would notice, such as a label that is cut off at some widths when no
+  Acceptance Criterion speaks of widths. Whether the feature is delivered
+  with it is the user's decision: the stage reports `DEFECTS`, blocked on
+  `user`, and not `DONE` with a remark, because the orchestrator stops for
+  the user only on what `Blocked On` names. Behaviour that the artifacts
+  merely leave open, and a fault in something the feature does not touch, are
+  not such findings: they are remarks after the block. A finding the user
+  has decided already, as the direction or a note says, is not reported
+  again.
 - A handoff that reports `ESCALATE`, `DEFECTS` or `BLOCK` says for each item
   where it is, what was expected and what was found, so that the stage it is
   routed to can act on it.
 - A stage that revised an artifact says in its handoff what changed.
+- What a later stage must do belongs in the stage's own artifact, which the
+  later stages build on. What a later stage should know and no artifact holds
+  goes under the heading `## For Later Stages` in the handoff, one item per
+  line: a risk, something the agent could not check, existing work that will
+  have to change. The orchestrator names that handoff on `Inputs` of the
+  dispatches that follow. Such a note informs and changes no contract: where
+  it disagrees with an artifact, the artifact counts.
 - An agent with nothing to change on a re-run reports `DONE`.
 
 ---

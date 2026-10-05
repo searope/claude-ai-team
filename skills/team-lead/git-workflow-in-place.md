@@ -52,7 +52,7 @@ interrupted stage is included:
 - `git log <Start Point>..HEAD`: commits made since the feature started. You
   cannot undo those; name them and leave them to the user.
 - The feature's working files under `.ai-team/`: its handoffs, its change
-  record and its ledger. Git ignores them, so name them yourself.
+  record, your notes and its ledger. Git ignores them, so name them yourself.
 - Warn that a rollback deletes uncommitted work for good, and that the list
   may hold edits the user made by hand since the feature started. Those go too
   unless the user saves them first.
@@ -65,7 +65,8 @@ confirmation first.
 1. Restore every modified or deleted tracked path on the list with
    `git restore --staged --worktree -- <paths>`.
 2. Delete every untracked path on the list.
-3. Delete the feature's handoffs and change record, then its ledger.
+3. Delete the feature's handoffs, its change record and your notes, then its
+   ledger.
 4. Run `git status --porcelain` and confirm that nothing of the feature is
    left. Report what you removed and what you left for the user.
 

@@ -18,7 +18,7 @@ allowed-tools:
   - Edit
   - Write
 metadata:
-  version: "8.0"
+  version: "8.1"
   role: "Surgical Software Engineer"
 ---
 
@@ -66,8 +66,8 @@ Arguments: $ARGUMENTS
 ### Phase 2: Execution
 Work through the ADR's Implementation Tasks in order. Apply minimal, surgical
 changes to fulfill every Acceptance Criterion and every Invariant, and apply
-each rewrite in the copy audit. On defect work, change only what the defect
-requires.
+each rewrite in the copy audit. Defects in your dispatch get the same
+discipline: change only what they require.
 
 ### Phase 3: Autonomous Verification
 Run local compilers, type-checkers, and baseline unit tests. Auto-fix any

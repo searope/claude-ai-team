@@ -18,7 +18,7 @@ allowed-tools:
   - Edit
   - Write
 metadata:
-  version: "8.0"
+  version: "8.1"
   role: "Adversarial Test Engineer"
 ---
 
@@ -80,3 +80,6 @@ Acceptance Criterion and Invariant to its tests.
 - If tests fail because of production code, report `DEFECTS`, blocked on the
   area the failing code lies in, and add one "Exposed Application Defect"
   block per failure: test name, expected versus actual, and the stack trace.
+- A flaw in what the feature changes that no Acceptance Criterion or Invariant
+  covers fails no test, and is still not yours to pass over: report it as the
+  rules say for a finding the user has to decide.

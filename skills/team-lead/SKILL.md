@@ -43,7 +43,7 @@ allowed-tools:
   - "PowerShell(git branch --list *)"
   - "PowerShell(gh issue view *)"
 metadata:
-  version: "10.0"
+  version: "10.1"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 
@@ -131,10 +131,13 @@ In the project:
   - one handoff per stage,
     `.ai-team/scratchpad/<feature-slug>-<name>-context.md`, where `<name>` is
     the stage's `Handoff` name in the `Routing Table`;
-  - the change record, `.ai-team/scratchpad/<feature-slug>-changes.md`.
-- **What you write:** the ledger and the change record, the handoff file of an
-  agent that could not write its own, and a `.gitignore` entry that is
-  missing. At project initiation also the project file and its import line.
+  - the change record, `.ai-team/scratchpad/<feature-slug>-changes.md`;
+  - your notes for the stages, `.ai-team/scratchpad/<feature-slug>-notes.md`
+    (section 7).
+- **What you write:** the ledger, the change record and your notes, the
+  handoff file of an agent that could not write its own, and a `.gitignore`
+  entry that is missing. At project initiation also the project file and its
+  import line.
 
 ---
 
@@ -147,18 +150,29 @@ In the project:
 3. **SHELL FOR GIT ONLY:** Work with `Read`, `Glob` and `Grep`. Do not re-run
    an agent's builds or tests: a stage's `DONE` is its word that its gates
    passed, and the security review reads the code and the tests but runs
-   nothing. The only shell commands you run are the `git` and `gh` commands
-   named in this skill and in the git workflow, and deleting untracked files
-   on a rollback list the user confirmed. Run each command on its own, not
-   chained with others, so that the read-only ones need no approval. The
-   command that writes the change record is the one exception.
+   nothing. In the shell you run `git` and `gh` only: a command that reads,
+   whenever a step needs what it shows, and a command that changes something
+   only where this skill, the feature's git workflow or a project override
+   gives you that step. A label, a push or a pull request that the project's
+   `Git Workflow` override asks for is such a step. Besides those, you delete
+   the untracked files on a rollback list the user confirmed. Run each
+   command on its own and as it is written, from the folder the session is
+   in: not chained with others and with no `cd` in front, so that the
+   read-only ones need no approval. The command that writes the change
+   record is the one chained command.
 4. **GIT CHANGES ONLY AS THE WORKFLOW ALLOWS:** Make only the commits and
    merges the feature's git workflow gives you. Never push, never merge into
    the base branch, and never rebase, reset or rewrite history, unless the
    project's git workflow tells you to.
 5. **PROJECT OVERRIDES COME FIRST:** Where the project file sets a
    `Git Workflow` or a `Fast Path`, follow it in place of the defaults, within
-   the limits that `Project Overrides` in the rules sets.
+   the limits that `Project Overrides` in the rules sets. An override can
+   also give you a step of your own, such as a label on an issue or a check
+   before delivery: carry it out as the override says, with the commands and
+   tools it takes, also where guardrail 3 would keep you from them.
+   Guardrails 1 and 2 hold all the same. What such a step changes in the
+   working tree and is not part of the feature, you undo as soon as the step
+   is done.
 
 ---
 
@@ -199,7 +213,7 @@ of the stages are named: take everything about a stage from its row.
 ### 1. Setup
 Do this on every run.
 1. `Read` the rules file, unless this conversation already holds it at
-   `Pipeline Version` 7.0, the version this skill is written for.
+   `Pipeline Version` 7.1, the version this skill is written for.
 2. Check git: run `git rev-parse --is-inside-work-tree`, and note whether
    `git status --porcelain` is empty. If the project is not a repository, tell
    the user and run `git init`.
@@ -275,7 +289,8 @@ For an existing feature, read what exists, each by its exact path:
   others exist;
 - the handoff of each stage, one path per `Handoff` name in the
   `Routing Table`. Never use a wildcard after the slug: it also matches a
-  feature whose slug starts with this one.
+  feature whose slug starts with this one;
+- your notes file, when it exists. You add to it and never start it over.
 
 **Earlier forms.** A handoff written under an earlier version may name a
 skill in `Route To` instead of an area in `Blocked On`, and an item in a
@@ -294,10 +309,10 @@ Walk the `Routing Table` from the top and bring the ledger up to date.
   out of every dispatch, and tell the user it is left over.
 - **Is a stage done?** A `PENDING` stage is completed only by a handoff of the
   current round, one whose `Round` equals the ledger's, that reports `DONE` or
-  `PASS`, or a `DEFECTS` that is a forward route (section 5). Older handoffs
-  are stale. A stage that is `DONE` in the ledger stays `DONE` until a
-  backward route resets it. A design stage also needs an artifact of its area
-  to exist.
+  `PASS`, or a `DEFECTS` whose items are all forward routes or findings for
+  the user (section 5). Older handoffs are stale. A stage that is `DONE` in
+  the ledger stays `DONE` until a backward route resets it. A design stage
+  also needs an artifact of its area to exist.
 - **Routes:** route every handoff of the current round that reports
   `ESCALATE`, `DEFECTS` or `BLOCK` (section 5). Route a handoff once: an item
   that is already in `Active Defects` is not routed again.
@@ -312,8 +327,10 @@ Walk the `Routing Table` from the top and bring the ledger up to date.
   user what the stage returned.
 - **Notes in handoffs:** read what each new handoff says after its block. Tell
   the user what it flags, such as a command that was denied, a file the agent
-  could not classify, or a risk. What the next stage needs to know goes into
-  its direction.
+  could not classify, or a risk. What it holds under `## For Later Stages`
+  reaches those stages through `Inputs` (section 7): do not repeat it in a
+  direction. A note for a later stage that stands anywhere else in a handoff,
+  as in handoffs from before version 7.1, goes into that stage's direction.
 
 ### 5. Route
 A handoff names the areas that have to change: `ESCALATE` and `DEFECTS` in
@@ -347,10 +364,26 @@ A handoff names the areas that have to change: `ESCALATE` and `DEFECTS` in
    route.
 6. **Blocked on the user.** When a handoff or a blocker is blocked on `user`,
    set `BLOCKED`, ask the user, and stop. On `continue`, route the blockers on
-   other areas as above. If none remain, increment `Round`, which makes the
-   blocked handoff stale, and run the blocked stage again with the user's
-   answer as its direction. That is not a backward route: no other stage is
-   reset, and it counts toward no cap.
+   other areas as above. What else happens depends on the status:
+   - **`ESCALATE` or `BLOCK`:** the stage could not finish. If no blocker on
+     another area remains, increment `Round`, which makes the blocked handoff
+     stale, and run the blocked stage again with the user's answer as its
+     direction. That is not a backward route: no other stage is reset, and it
+     counts toward no cap.
+   - **`DEFECTS`:** the stage finished, and what it found is for the user to
+     decide. The stage is complete and is not run again for the answer. Say
+     what was found, and give the three ways on with what each leads to:
+     - *Accept it:* the feature runs on as it is. A bare `continue` is this
+       answer.
+     - *Have it changed:* the user says what should change. Route that like
+       a defect on the area the change belongs to, with the user's words as
+       the direction; the line under the table in `Write Isolation` says
+       which area that is. A backward route made this way counts toward no
+       cap, and one to a design stage re-opens the design gate as always.
+     - *Stop the feature.*
+
+     Write the decision into your notes (section 7), so that the later
+     stages have it.
 7. **Any other block.** `BLOCKED` is also set where this skill or the git
    workflow says so. On `continue`, evaluate again from section 3.
 
@@ -397,14 +430,26 @@ dispatched.
 ### 7. Dispatch
 Build every dispatch as `Dispatch and Handoff` in the rules lays it out, from
 the stage's row in the `Routing Table`. An agent sees only its dispatch and
-the files it names: it reads neither the ledger nor the other agents'
-handoffs, so everything it needs from them must be in the dispatch.
+the files it names. It never reads the ledger, and it reads another agent's
+handoff only when the dispatch names it, so everything it needs from them
+must reach it that way.
 - `Rules` is the absolute path of the rules file. `Project` is the path of the
   project file, relative to the folder the feature is developed in.
 - `Inputs` are the artifacts in the row's `Inputs` column that exist and were
-  written by a stage that is not `SKIPPED`, each by its path, or `none`.
+  written by a stage that is not `SKIPPED`, each by its path. After them come
+  the notes: the handoff file of every earlier stage that is not `SKIPPED`
+  and holds a `## For Later Stages` part, and your own notes file once it
+  exists. With nothing to name, the line says `none`.
 - `Handoff` is the path of the stage's handoff file.
-- `Defects` are the `Active Defects` routed to the stage.
+- `Defects` are the `Active Defects` routed to the stage. They ride on the
+  run the stage is due anyway, as the rules say: its first run, a run after
+  something it builds on changed, or a run for these defects alone.
+- **Your notes.** An agent reads neither the ledger nor this conversation, so
+  what only you know reaches it through your notes file. Write there, under
+  the one heading `## For Later Stages` and in one line each, every decision
+  of the user that no artifact records, such as an answer after a block or a
+  finding they accepted, and the result of every check you made yourself.
+  That keeps the direction to its one line.
 - **Direction:** one line, as the rules say. It can also be a change request
   in the user's words, or the user's answer after a block. When the request
   is an issue, give its number and title: the first stage reads the issue's
@@ -443,8 +488,8 @@ Then run the current stage:
 git status --porcelain --untracked-files=all > .ai-team/scratchpad/<feature-slug>-changes.md; git diff <Start Point> >> .ai-team/scratchpad/<feature-slug>-changes.md
 ```
 
-  If the command fails, do not dispatch the stage: set `BLOCKED` and tell the
-  user.
+  Run it exactly as written, with nothing in front of it. If the command
+  fails, do not dispatch the stage: set `BLOCKED` and tell the user.
 - **The last stage is yours.** When every stage before it is `DONE` or
   `SKIPPED` and `Active Defects` is empty, carry out `Deliver` of the git
   workflow. If an item is still open then, set `BLOCKED` and tell the user.
@@ -473,7 +518,8 @@ to `PENDING`, and the user approves again before a build stage runs.
   `Write Isolation` says which area a change belongs to.
 - **Change request after approval:** do not route it and do not dispatch
   anything in this run. Tell the user the feature can run on to
-  `READY_FOR_MERGE` or be stopped, and wait for their answer.
+  `READY_FOR_MERGE` or be stopped, and wait for their answer. The user's
+  answer to a finding (section 5) is not such a request: it is routed.
 
 ### 9. Git workflow
 The procedure of the feature's workflow says how each step is done. These
@@ -509,8 +555,18 @@ The commands:
 - **`sync`:** in the worktree workflow, carry out `Update`, then evaluate as
   usual. In place there is nothing to bring up to date: say so.
 
-### 10. Report
-Whenever you stop, tell the user:
+### 10. Ask and report
+**Asking.** Wherever this skill or a workflow procedure has you ask the user
+to choose, use `AskUserQuestion` when it is available, so that the user
+answers by click, and give each choice with what it leads to. Before the
+question, bring the ledger to the state the step says, and tell the user what
+the report below holds: the question shows only its own text. Where the step
+says to stop, the stop is for the answer. When the answer comes through the
+tool, carry on with it in the same turn, as if the user had typed it after
+`/team-lead <feature-slug>`. Without the tool, or when the user leaves the
+question unanswered, stop.
+
+**Reporting.** Whenever you stop, and before you ask, tell the user:
 - **Pipeline Stage:** the current stage and gate status.
 - **Since Last Stop:** which stages ran and what they produced.
 - **Needed From You:** the decision or approval you are waiting on, or what
