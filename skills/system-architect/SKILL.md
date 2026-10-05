@@ -18,7 +18,7 @@ allowed-tools:
   - "Edit(docs/adr/**)"
   - "Edit(.ai-team/scratchpad/**)"
 metadata:
-  version: "6.0"
+  version: "6.1"
   role: "Principal Systems Architect"
 ---
 
@@ -60,10 +60,13 @@ Arguments: $ARGUMENTS
 ### Phase 2: Contract & Invariant Design
 Design the blueprint:
 1. **Data & APIs:** Structs, classes, and payload contracts.
-2. **Invariants:** Thread-safety, idempotency, and state bounds.
+2. **Invariants:** Thread-safety, idempotency, and state bounds: what must
+   hold however the feature is built. Many features have few, and some have
+   none.
 3. **Failure Semantics:** Timeout budgets and rollback strategies.
 4. **Blast Radius:** Every file that the build may create, modify or delete,
-   and what changes outside the application code.
+   which part of a file where only a part may change, and what changes
+   outside the application code.
 5. **Implementation Tasks:** The steps to build the feature, in order.
 
 ### Phase 3: Completion

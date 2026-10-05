@@ -1,6 +1,6 @@
 # AI Team Pipeline: Rules for Every Agent
 
-**Pipeline Version:** 7.1
+**Pipeline Version:** 7.2
 
 Feature work runs through a pipeline of stages. Each stage is the work of one
 skill, carried out by an agent that the orchestrator dispatches. The
@@ -79,10 +79,16 @@ What a feature does is `Spec`. Its wording is `Copy`. Its look and layout are
 - A file that lies in no area can be changed only as `Source`, and only when
   the ADR's `Allowed Blast Radius (Source)` names it. Anything else that
   concerns such a file is blocked on `user`.
-- Besides its area, an agent writes one file: its handoff (§5), at the path
-  its dispatch gives. Handoffs and the orchestrator's own working files are
-  under `.ai-team/`, which git ignores. No agent reads the orchestrator's
-  ledger: what an agent needs from it arrives in the dispatch.
+- In the project, an agent writes one file besides its area: its handoff
+  (§5), at the path its dispatch gives. Handoffs and the orchestrator's own
+  working files are under `.ai-team/`, which git ignores. No agent reads the
+  orchestrator's ledger: what an agent needs from it arrives in the dispatch.
+- A working file of an agent's own, such as a log, a screenshot or a copy
+  made for a check, is no part of the feature. It goes outside the project,
+  into the scratch folder of the agent's session, and never into the
+  project's folders. The agent deletes such files before it reports. One
+  that it keeps for the user or for a later stage, or cannot delete, it names
+  in its handoff with its path.
 - An agent that finds a problem in another area does not fix it. It reports
   it (§5).
 - Only the orchestrator dispatches agents. An agent invokes no skill.
@@ -109,6 +115,12 @@ The rest of this section binds an agent that has a shell.
   stage (§5), what the project file's `Worktree setup` tells it to set up,
   installing a dependency the ADR names, and the clean-up of generated files
   below. It deploys nothing.
+- It writes and edits the project's files with its file tools, which keep
+  each file's line endings. No script of its own and no shell command writes
+  into a file of the project. In the shell it only deletes or renames a file
+  of its own area (§2). What an allowed tool changes by itself, such as a
+  lock file when a dependency is installed, is that tool's work and not the
+  agent's edit.
 - It runs every tool from the root of the folder it was dispatched in, and in
   a worktree in the way `Worktree setup` says. The code it builds and tests
   must be that folder's code. An environment that another folder shares can
@@ -138,7 +150,8 @@ The rest of this section binds an agent that has a shell.
 
 These are the parts of each artifact that another stage depends on. Whoever
 writes the artifact must write them exactly as named; everyone else may rely
-on them. What else an artifact contains is its writer's business.
+on them. What else an artifact contains is its writer's business. An artifact
+is as short as the feature allows: every stage after it reads all of it.
 
 The six UI states, wherever an artifact or a skill speaks of them, are Empty,
 Loading, Ideal, Overflow, Degraded and Error.
@@ -147,6 +160,11 @@ Loading, Ideal, Overflow, Degraded and Error.
 - `- **Revision:** <n>` directly under the title: `1` for a new spec, one
   higher on every rewrite.
 - Acceptance Criteria numbered `AC-1`..`AC-N`, each testable and deterministic.
+  A criterion says what the product does or shows once the feature is in, so
+  that it can be checked on the product alone, now and after later features.
+  One behaviour takes one criterion. What the feature must leave as it is, is
+  scope and not a criterion. Neither is a gate of the project or a rule of
+  the pipeline.
 - A `## Topology Flags` section with exactly these two lines:
 
 ```markdown
@@ -180,11 +198,17 @@ Loading, Ideal, Overflow, Degraded and Error.
   created, modified or deleted in `Source`. It includes every file the copy
   audit names, every file that holds the strings of the copy file, and every
   token, theme or style file the UI spec calls for. It never lists test files.
+  An entry can limit the change to a part of its file. This list is where the
+  ADR says what the feature leaves unchanged.
 - `Allowed Blast Radius (Infra)`: the same for `Infra`.
 - `Infra Impact: yes` or `Infra Impact: no` on one line, followed by what
   changes. It is `yes` when the feature needs any change in `Infra`, such as
   CI, containers, environment variables or database migrations.
-- Invariants numbered `INV-1`..`INV-N`.
+- Invariants numbered `INV-1`..`INV-N`: what must stay true of the product
+  however it is built, and what no Acceptance Criterion already says, such as
+  a bound, an ordering, idempotency or what happens when something fails. The
+  wording of the code or the markup is not an invariant, and neither is what
+  the feature leaves unchanged. An ADR can have no invariants.
 - Implementation Tasks numbered `T-1`..`T-N`, ordered and atomic.
 - Every new dependency is named.
 
@@ -199,6 +223,13 @@ Loading, Ideal, Overflow, Degraded and Error.
   That test names it by its number (`AC-3`, `INV-1`), in its name or in a
   comment beside it. A review counts a test without such a name for what it
   plainly verifies.
+- A test checks the product as it stands in the folder, and holds on every
+  checkout: after the feature is merged, and after later features. It does
+  not compare the working tree with an earlier commit, and it is not skipped
+  outside the feature's branch.
+- What a spec or an ADR says about the change itself, and not about the
+  product, has no test: above all that the feature leaves something
+  unchanged. The review checks that against the change record.
 - Every test can fail. A test that passes whatever the production code does
   is vacuous: an assertion that is always true, a `try`/`catch` that passes
   whether or not the error is raised, a check that only proves that nothing

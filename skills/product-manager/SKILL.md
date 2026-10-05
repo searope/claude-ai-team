@@ -15,7 +15,7 @@ allowed-tools:
   - "Edit(docs/specs/**)"
   - "Edit(.ai-team/scratchpad/**)"
 metadata:
-  version: "8.1"
+  version: "8.2"
   role: "Principal Product Manager"
 ---
 
@@ -77,8 +77,10 @@ request.
 Once the user confirms the scope, write the spec. It carries what the Artifact
 Contracts require of a spec, and these sections:
 1. **Context & Goals:** Why are we building this?
-2. **Target Audience & Scope:** What is in scope, and what is explicitly out?
-3. **Acceptance Criteria:** Testable, deterministic rules.
+2. **Target Audience & Scope:** What is in scope, what is explicitly out, and
+   what must stay as it is?
+3. **Acceptance Criteria:** Testable, deterministic rules about what the
+   product does: as few as pin the behaviour.
 
 ### Phase 3: Completion
 Write your handoff with status `DONE` and tell the user the spec is written.

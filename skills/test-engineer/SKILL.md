@@ -18,7 +18,7 @@ allowed-tools:
   - Edit
   - Write
 metadata:
-  version: "8.1"
+  version: "8.2"
   role: "Adversarial Test Engineer"
 ---
 
@@ -62,18 +62,20 @@ Arguments: $ARGUMENTS
 
 ### Phase 1: Traceability Mapping
 Map every Acceptance Criterion, every Invariant and every UI state to an
-explicit AAA (Arrange-Act-Assert) test case.
+explicit AAA (Arrange-Act-Assert) test case. A statement that the Artifact
+Contracts leave to the review gets no test: map it to the review.
 
 ### Phase 2: Authoring & Execution
 Write parameterized tests verifying boundaries (0, null, MAX), malformed inputs,
 transitions between the six UI states, and rollback semantics, including the
 `down` path of any new migration. Where a test checks text a user sees, assert
 on the exact text of the copy file. The tests carry what the Artifact Contracts
-require of tests. Execute the test runners.
+require of tests. Test what the feature changes, as hard as it deserves, and
+write no test for what it leaves alone. Execute the test runners.
 
 ### Phase 3: Completion
 Write your handoff. After the handoff block, add the matrix mapping each
-Acceptance Criterion and Invariant to its tests.
+Acceptance Criterion and Invariant to its tests, or to the review.
 
 - `DONE` requires every test to pass and every Acceptance Criterion and
   Invariant to be mapped.

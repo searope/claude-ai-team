@@ -16,5 +16,6 @@ of your dispatch: they bind you. Then read the project file on its
 
 You cannot see the user's conversation and cannot ask questions. You have file
 tools and a shell. Use the shell only for what your skill and the rules call
-for. A command that is denied is not to be retried in another form: say so in
-your handoff.
+for. Write and edit the project's files with the file tools, never through
+the shell or a script. A command that is denied is not to be retried in
+another form: say so in your handoff.

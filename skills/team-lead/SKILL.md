@@ -43,7 +43,7 @@ allowed-tools:
   - "PowerShell(git branch --list *)"
   - "PowerShell(gh issue view *)"
 metadata:
-  version: "10.1"
+  version: "10.2"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 
@@ -213,7 +213,7 @@ of the stages are named: take everything about a stage from its row.
 ### 1. Setup
 Do this on every run.
 1. `Read` the rules file, unless this conversation already holds it at
-   `Pipeline Version` 7.1, the version this skill is written for.
+   `Pipeline Version` 7.2, the version this skill is written for.
 2. Check git: run `git rev-parse --is-inside-work-tree`, and note whether
    `git status --porcelain` is empty. If the project is not a repository, tell
    the user and run `git init`.
@@ -277,8 +277,28 @@ Do this on every run.
 4. **Start.** `Read` the procedure of the chosen workflow, unless the
    project's `Git Workflow` override replaces all of it, and carry out its
    `Start`.
-5. **The ledger.** Create it now, with the workflow, every stage `PENDING`,
-   and the `Start Point` that `Start` gave you.
+5. **Fast path.** By default a trivial change never reaches you: it is done
+   directly in the conversation. If the project's `Fast Path` override routes
+   qualifying changes through you, decide now whether this request
+   qualifies. Find the files in `Source` and `Infra` that the change would
+   touch, with `Read`, `Glob` and `Grep`. On a fast path they stand in for
+   the Allowed Blast Radius, so name each one, and name no test file: tests
+   are written in their own area. A request whose files you cannot name does
+   not qualify. Check the request and those files against the override's
+   conditions, and record which way it goes and which condition decides it,
+   in `History` and as a notice for the user: say it when the first stage
+   starts (section 7), or in your next report if you did not. The
+   conditions are the project's own rule. If the request asks for a fast
+   path that they do not allow, do not start: tell the user which condition
+   stands against it, and that the ways on are the full pipeline or a change
+   to the rule in the project file. A request that asks for the full
+   pipeline gets it.
+6. **The ledger.** Create it now, with the workflow and the `Start Point`
+   that `Start` gave you. Every stage is `PENDING`. On a fast path, the
+   stages the override skips are `SKIPPED`, and so is a stage whose
+   `Runs when` condition reads an artifact the fast path does not produce;
+   `Design Gate` is `SKIPPED (fast path)`; and the `Fast Path` section holds
+   the request and the files that may change.
 
 ### 3. Hydrate
 For an existing feature, read what exists, each by its exact path:
@@ -455,17 +475,16 @@ must reach it that way.
   is an issue, give its number and title: the first stage reads the issue's
   text in this conversation. If the conversation no longer holds it, read the
   issue again first.
-- **Fast path:** by default a trivial change never reaches you: it is done
-  directly in the conversation. If the project's `Fast Path` override routes
-  qualifying changes through you, check the request against its conditions.
-  When it qualifies, create the ledger with the stages the override skips as
-  `SKIPPED` and `Design Gate` set to `SKIPPED (fast path)`, write the request
-  and the files that may change into the ledger's `Fast Path` section, and
-  add the `Fast Path` and `Files` lines to every dispatch. A stage whose
-  `Runs when` condition reads an artifact the fast path does not produce is
-  `SKIPPED` too. When the request does not qualify, run the full pipeline.
+- **Fast path:** on a fast path (section 2), add the `Fast Path` and `Files`
+  lines to every dispatch, from the ledger's `Fast Path` section.
 
 Then run the current stage:
+- **Say what starts.** Write one line to the user before every stage you
+  invoke, and only then invoke it: which stage starts and what it is about
+  to do. An isolated stage shows nothing while it runs, and one with a long
+  gate can take many minutes. Before the first stage of a feature in a
+  project that has a fast path, the line also says which way the feature
+  runs, as a fast path or in full, and which condition decided it.
 - **A stage that runs in this conversation** is a dialogue with the user and
   may take several turns. First tell the user anything from setup they have
   not heard yet. Then invoke the stage's skill with the dispatch. When the
