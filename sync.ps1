@@ -20,6 +20,24 @@ $Team = Get-Content (Join-Path $PSScriptRoot 'team.json') -Raw | ConvertFrom-Jso
 $Skills = @($Team.skills)
 $Agents = @($Team.agents)
 
+# A malformed roster stops the script: an empty name would make it walk every skill there is.
+foreach ($name in $Skills + $Agents) {
+    if ($name -isnot [string] -or $name -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
+        throw "team.json holds '$name', which is not the name of a skill folder or an agent file. Nothing was done."
+    }
+}
+if (-not $Skills -or -not $Agents) { throw 'team.json names no skills or no agent types. Nothing was done.' }
+
+# The roster entries that have no file under a root.
+function Get-MissingEntries([string]$Root) {
+    foreach ($skill in $Skills) {
+        if (-not (Test-Path (Join-Path $Root "skills/$skill/SKILL.md"))) { "skills/$skill" }
+    }
+    foreach ($agent in $Agents) {
+        if (-not (Test-Path (Join-Path $Root "agents/$agent"))) { "agents/$agent" }
+    }
+}
+
 # The team's files under a root, as relative paths like "skills/team-lead/SKILL.md".
 function Get-TeamFiles([string]$Root) {
     if (-not (Test-Path $Root)) { return @() }
@@ -61,6 +79,8 @@ function Compare-Team([string]$Repo, [string]$Live) {
 function Copy-Team([string]$From, [string]$To, [bool]$RemoveExtra) {
     $source = @(Get-TeamFiles $From)
     if (-not $source) { throw "No AI team files found in $From. Nothing was copied." }
+    $missing = @(Get-MissingEntries $From)
+    if ($missing) { throw "$From lacks $($missing -join ', '), named in team.json. Nothing was copied." }
     foreach ($rel in $source) {
         $dest = Join-Path $To $rel
         New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
@@ -81,7 +101,8 @@ $Repo = $PSScriptRoot
 
 switch ($Mode) {
     'check' {
-        $diff = @(Compare-Team $Repo $ClaudeDir)
+        $diff = @(Get-MissingEntries $Repo | ForEach-Object { "named in team.json, missing in the repository: $_" })
+        $diff += @(Compare-Team $Repo $ClaudeDir)
         if ($diff) { $diff; exit 1 }
         "The repository and $ClaudeDir match."
     }

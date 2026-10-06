@@ -18,7 +18,7 @@ allowed-tools:
   - Edit
   - Write
 metadata:
-  version: "8.1"
+  version: "8.2"
   role: "Surgical Software Engineer"
 ---
 
@@ -64,10 +64,10 @@ Arguments: $ARGUMENTS
 2. Inspect target files to match existing error-handling and typing conventions.
 
 ### Phase 2: Execution
-Work through the ADR's Implementation Tasks in order. Apply minimal, surgical
-changes to fulfill every Acceptance Criterion and every Invariant, and apply
-each rewrite in the copy audit. Defects in your dispatch get the same
-discipline: change only what they require.
+Work through the ADR's Implementation Tasks that fall in your area, in order.
+Apply minimal, surgical changes to fulfill every Acceptance Criterion and
+every Invariant, and apply each rewrite in the copy audit. Defects in your
+dispatch get the same discipline: change only what they require.
 
 ### Phase 3: Autonomous Verification
 Run local compilers, type-checkers, and baseline unit tests. Auto-fix any

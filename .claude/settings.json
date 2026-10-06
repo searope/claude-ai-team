@@ -1,7 +1,8 @@
 {
   "permissions": {
     "deny": [
-      "Edit(~/.claude/skills/synced/**)"
+      "Edit(~/.claude/skills/**)",
+      "Edit(~/.claude/agents/**)"
     ]
   },
   "hooks": {

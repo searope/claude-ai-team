@@ -63,8 +63,7 @@ Two facts are used throughout:
 
 ## Commit
 
-You commit on the feature's branch, and nowhere else. Never push, and never
-merge into the base branch, unless the project's `Git Workflow` tells you to.
+You commit on the feature's branch, and nowhere else.
 
 To commit, run `git status --porcelain --untracked-files=all`, which lists
 every new file and not only its folder. Stage every path it lists by name with
@@ -89,10 +88,9 @@ The messages are:
 Do this before each run of Testing, on `sync`, and at the start of a resume.
 
 If a merge is already in progress, do not start again:
-`git rev-parse --verify --quiet MERGE_HEAD` prints a hash then. When
-`git diff --name-only --diff-filter=U` prints nothing, the conflicts are
-resolved: go to the end of step 6. Otherwise they are still with the stages
-they were routed to.
+`git rev-parse --verify --quiet MERGE_HEAD` prints a hash then. The conflicts
+are with the stages they were routed to until each of those has reported
+`DONE`. Then the merge is yours to complete: go to the end of step 6.
 
 1. In a repository with a remote, run `git fetch origin`.
 2. Run `git rev-list --count HEAD..<base>`. If it prints `0`, the branch is up
@@ -111,8 +109,13 @@ they were routed to.
    `Resolve the merge conflict with <base> in <files>`. This is a backward
    route: `Round` goes up, but it counts toward no cap. A conflicting file
    that lies in no area is the user's to resolve: set `BLOCKED` and name the
-   file. When the conflicts are resolved, stage the resolved files by name,
-   complete the merge with `git commit --no-edit`, and then do step 5.
+   file. As soon as every stage that a conflict was routed to has reported
+   `DONE`, and before any other stage runs, complete the merge. Note the
+   hash that `git rev-parse MERGE_HEAD` prints: it is the base commit being
+   merged. Stage the resolved files by name, and check that
+   `git diff --name-only --diff-filter=U` prints nothing. Then run
+   `git commit --no-edit` and do step 5, with that hash as the
+   `Start Point`.
 7. **On `sync` or on a resume, when Testing has already run:** if the merge
    brought changes in, it is a backward route to Testing that counts toward
    no cap. If it brought nothing, say so and change nothing.
@@ -127,7 +130,8 @@ they were routed to.
    to Security that counts toward no cap: `Round` goes up, and you write a new
    change record and run Security again. If it happens twice in a row, set
    `BLOCKED` and name the paths that keep changing.
-2. Commit those paths (see Commit).
+2. Commit those paths (see Commit), and name the commit in `History`: it is
+   the delivered commit.
 3. Check the base once more with steps 1 and 2 of Update. If the base has
    commits the branch lacks, do not merge them. Say in your report how many
    there are, and that `/team-lead <feature-slug> sync` brings them in and
@@ -167,7 +171,9 @@ the list and get a confirmation first.
    left. Tell the user the worktree folder is still there and can be removed.
 
 **Shelve:**
-1. Commit the work so far (see Commit), if there is any.
+1. If a merge is in progress, run `git merge --abort`: the base is merged
+   again when the feature is resumed. Then commit the work so far (see
+   Commit), if there is any.
 2. In the ledger set `Gate Status` to `REJECTED` and `Design Gate` to
    `PENDING`. Add a `History` line with the stage the feature stopped at and
    the reason.

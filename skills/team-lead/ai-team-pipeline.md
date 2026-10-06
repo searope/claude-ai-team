@@ -1,6 +1,6 @@
 # AI Team Pipeline: Rules for Every Agent
 
-**Pipeline Version:** 7.3
+**Pipeline Version:** 7.4
 
 Feature work runs through a pipeline of stages. Each stage is the work of one
 skill, carried out by an agent that the orchestrator dispatches. The
@@ -43,13 +43,6 @@ things in it:
   `git rev-parse --git-dir` and `git rev-parse --git-common-dir` print
   different paths.
 - **Overrides for this project:** the project's own rules (§6).
-
-**Older projects.** A project set up before version 5.0 has a full copy of an
-older version of the rules at `.claude/ai-team-pipeline.md`. That file is then
-its project file, and only two blocks of it count: `Project Paths` and
-`Overrides for this project`. The rest of it is out of date, its handoff block
-and its routing included: ignore it and follow these rules. Such a file has no
-`Worktree setup` line; tools are then run as its overrides say.
 
 ---
 
@@ -118,9 +111,9 @@ The rest of this section binds an agent that has a shell.
 - It writes and edits the project's files with its file tools, which keep
   each file's line endings. No script of its own and no shell command writes
   into a file of the project. In the shell it only deletes or renames a file
-  of its own area (§2). What an allowed tool changes by itself, such as a
-  lock file when a dependency is installed, is that tool's work and not the
-  agent's edit.
+  of its own area (§2), and cleans up the generated files below. What an
+  allowed tool changes by itself, such as a lock file when a dependency is
+  installed, is that tool's work and not the agent's edit.
 - It runs every tool from the root of the folder it was dispatched in, and in
   a worktree in the way `Worktree setup` says. The code it builds and tests
   must be that folder's code. An environment that another folder shares can
@@ -150,8 +143,11 @@ The rest of this section binds an agent that has a shell.
 
 These are the parts of each artifact that another stage depends on. Whoever
 writes the artifact must write them exactly as named; everyone else may rely
-on them. What else an artifact contains is its writer's business. An artifact
-is as short as the feature allows: every stage after it reads all of it.
+on them. What else an artifact contains is its writer's business, within two
+limits. An artifact is as short as the feature allows: every stage after it
+reads all of it. And it says each thing once: it holds no summary of itself,
+for the user or for a later stage. A summary is a second statement that can
+disagree with the first, and the orchestrator writes what the user is shown.
 
 The six UI states, wherever an artifact or a skill speaks of them, are Empty,
 Loading, Ideal, Overflow, Degraded and Error.
@@ -187,7 +183,8 @@ Loading, Ideal, Overflow, Degraded and Error.
   The rewrites are applied in `Source`.
 
 **UI spec**
-- Every interactive component is defined in the six UI states.
+- Every interactive component that the feature adds or changes is defined in
+  the six UI states.
 - Strings appear only as copy keys.
 - Design tokens are specified in the UI spec. Token, theme and style files are
   `Source`.
@@ -291,13 +288,6 @@ Files: <paths that may change>
   is no spec or ADR. The request stands in for the Acceptance Criteria, and
   `Files` for the Allowed Blast Radius. There are no Invariants and no
   Implementation Tasks: what a skill says about them does not apply.
-- **A dispatch from an earlier version** has no `Inputs` or `Handoff` line.
-  The agent then builds on the feature's artifacts that exist at the paths of
-  §2. A stage that works from the change record finds it at
-  `.ai-team/scratchpad/<feature-slug>-changes.md`. The agent writes its
-  handoff to `.ai-team/scratchpad/<feature-slug>-<name>-context.md`, where
-  `<name>` is `pm`, `copy`, `ui`, `arch`, `dev`, `devops`, `test` or
-  `security` for the stages 1 to 8.
 
 **Escalation.** An agent that cannot finish correctly does not guess and does
 not touch another area. It reports `ESCALATE` and names, in `Blocked On`, the
@@ -316,7 +306,8 @@ followed by whatever its skill adds and, when it has notes for later stages,
 by a part headed `## For Later Stages`. It returns the same text as its final
 message. An agent that has no file-writing tools only returns it, and the
 orchestrator writes the file. A handoff is addressed to the orchestrator: no
-agent reads another agent's handoff unless its dispatch cites it.
+agent reads another agent's handoff unless its dispatch cites it. It is
+short, and it does not repeat what the stage's artifact holds.
 
 ```markdown
 # Handoff: <the stage, as on the `Stage` line> / <feature-slug>
@@ -355,6 +346,15 @@ agent reads another agent's handoff unless its dispatch cites it.
   not such findings: they are remarks after the block. A finding the user
   has decided already, as the direction or a note says, is not reported
   again.
+- A flaw in a design artifact of another area is a defect only when a stage
+  that followed the artifact would build or test the wrong thing. A slip that
+  misleads no stage, such as a loosely worded claim or a sentence that the
+  rest of the artifact plainly corrects, is a remark after the block, and the
+  orchestrator shows it to the user. A stage reports all the defects it has
+  found in one handoff.
+- On a run after a design artifact was revised, a stage takes up what changed
+  and what that touches in its own work. It does not look for new flaws in
+  the parts of the artifact that stayed as they were.
 - A handoff that reports `ESCALATE`, `DEFECTS` or `BLOCK` says for each item
   where it is, what was expected and what was found, so that the stage it is
   routed to can act on it.
@@ -385,9 +385,10 @@ Overrides may cover:
   feature is developed, who commits, how its branch is kept up to date, how a
   finished feature is delivered, and how one is rolled back, shelved and
   resumed.
-- **Fast Path** (the orchestrator): which changes may skip stages, and which
-  stages they skip. The orchestrator records the request and the files that
-  may change, and passes them in every dispatch (§5).
+- **Fast Path** (the orchestrator): which changes are built without design
+  artifacts, and which stages they skip besides the ones that write those.
+  The orchestrator records the request and the files that may change, and
+  passes them in every dispatch (§5).
 - **Trivial Lane** (the orchestrator): which changes are made directly in the
   user's conversation, and how they are made and delivered there. Such a
   change is no work of the pipeline: it has no stage and no dispatch, and

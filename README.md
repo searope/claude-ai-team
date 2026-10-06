@@ -13,7 +13,8 @@ and merge.
   folder.
 - The eight specialist skills are hidden from the slash-command menu, with `user-invocable: false` in their
   frontmatter. `/team-lead` is the only command of the team that you type; it calls the others. The model can
-  still call a hidden skill, and a call that carries no dispatch is refused by the skill's agent type.
+  still call a hidden skill, and a call that carries no dispatch is refused: by the skill's agent type, or by
+  the skill itself where it runs in the conversation.
 - An **agent type** is a tool profile for an isolated agent: file tools or not, a shell or not. Besides that it
   makes the agent read the two files its dispatch names, the pipeline rules and the project file. The tools are
   the only thing that is technically enforced: the path limits of the write areas are rules the agents follow
@@ -36,13 +37,9 @@ and merge.
   as what makes a test count, is in the Artifact Contracts of the rules and in neither skill.
 - A **project file**, `.claude/ai-team-project.md`, is all a project holds: its source, test and infra paths, its
   git workflow settings, its overrides of the rules, and a few lines that say when the pipeline applies.
-- A request takes one of three **lanes**. In full, it is a feature that runs through every stage. On a **fast
-  path** it is a feature that skips the stages the project names, as a rule the design stages. In the **trivial
-  lane** it is made directly in the conversation, with no stage and no review. The two lighter lanes exist only
-  where a project file defines them, with its own conditions. `team-lead` chooses the lane when a request starts
-  and says which condition decided it. The trivial lane also takes your word: you call the change trivial, or
-  you agree when `team-lead` asks. A change that outgrows a lighter lane stops there, and you choose how it goes
-  on.
+- A request takes one of three **lanes**: all the stages, a **fast path** that skips the stages a project
+  names, or the **trivial lane**, in which the change is made directly with no stage and no review. `team-lead`
+  chooses the lane when a request starts. "Lighter lanes" below says how.
 - A feature runs in one of two **git workflows**, chosen when it starts. In a **worktree**, the feature has a
   folder and a branch of its own, `team-lead` commits there, and several features can run at once. **In place**,
   features run one at a time in the folder you are in, and you commit them.
@@ -74,8 +71,8 @@ and merge.
   - `ai-team-auditor`: read only, no shell and no file writing. Used by `security-reviewer`.
 - `team.json`: the team roster. It names every skill and agent type that belongs to the team.
 - `sync.ps1`: copies these files to and from Claude Code's own folders.
-- `CLAUDE.md` and `.claude/`: the scope rules for Claude Code sessions in this repository, and the hook that
-  enforces them.
+- `CLAUDE.md` and `.claude/`: the scope rules for Claude Code sessions in this repository, and the hook and
+  the deny rules that enforce them.
 
 ## Where the live copy is
 
@@ -90,10 +87,12 @@ copy of those files. Changes are made here, tested, and then installed there.
 This repository covers the AI team and nothing else. Skills that are not in `team.json` stay out of it. That
 includes `~/.claude/skills/synced`, which the desktop app downloads from your claude.ai account and owns.
 
-In a Claude Code session opened here, `.claude/hooks/team-scope.ps1` refuses any write by the file tools under
-`~/.claude/skills`, `~/.claude/agents`, or this repository's `skills/` and `agents/` unless the file belongs to
-a skill or agent type in `team.json`. So a skill cannot be created or changed there by accident. The hook does
-not see shell commands, and it does not run in sessions opened in other projects.
+In a Claude Code session opened here, two things guard the file tools. The deny rules in
+`.claude/settings.json` refuse every write under `~/.claude/skills` and `~/.claude/agents`: a live file changes
+only through `sync.ps1 install`. And `.claude/hooks/team-scope.ps1` refuses a write under this repository's
+`skills/` and `agents/` unless the file belongs to a skill or agent type in `team.json`. So a skill cannot be
+created or changed by accident. Neither sees shell commands, and neither applies in sessions opened in other
+projects.
 
 ## Install on a machine
 
@@ -109,12 +108,14 @@ project's `CLAUDE.md` and adds `.ai-team/` and `.claude/worktrees/` to `.gitigno
 when the working tree was clean. The project must be a git repository; `team-lead` creates one if needed.
 
 `install` overwrites the team's files in `~/.claude` with the ones from this repository. It does not delete
-anything: a file that is in `~/.claude` but not here is reported and left in place.
+anything: a file that is in `~/.claude` but not here is reported and left in place. `sync.ps1` stops before it
+copies anything when `team.json` is malformed or names a skill or agent type that the source lacks.
 
 ## Lighter lanes
 
-By default every request that reaches `team-lead` runs through all the stages. A project turns on a lighter lane
-by defining it under `Overrides for this project` in its project file:
+A request that reaches `team-lead` runs through all the stages, unless you call it trivial: the first lines of
+the project file send such a change past the pipeline. A project sets its own lanes under `Overrides for this
+project` in its project file:
 
 - **Fast Path:** which stages a small change skips, and the conditions it must meet. For example: a change of
   text or style skips stages 1 to 4 and 6, when it touches at most three files and none of them is a schema or
@@ -122,17 +123,16 @@ by defining it under `Overrides for this project` in its project file:
 - **Trivial Lane:** which changes are made directly, and what is still asked of such a change. For example: a
   change of at most ten lines in one stylesheet, after which the tests are run once.
 
-`team-lead` holds each new request against these conditions and takes the lightest lane that fits. It never
-takes the trivial lane on its own judgement: when a request meets the conditions and you have not called it
-trivial, it asks. A request that asks for a lighter lane than the conditions allow does not take it:
-`team-lead` says which condition stands against it and asks whether to go on in the lane that fits. It moves
-such a change to that lane without asking only where the project's rule orders the move in so many words.
+`team-lead` takes the lightest lane whose conditions hold, and says which condition decided it. Three things it
+does not do on its own:
 
-A trivial change that proves bigger while it is made is undone and treated the same way. A fast-path stage
-that needs one more file gets it without a stop, as long as the conditions still hold with that file. When
-they do not, or when the request leaves open what a design stage would have settled, `team-lead` stops and
-offers three ways on: all the stages, staying on the fast path with your answer or a narrower change, or
-stopping the feature. A feature that moves to all the stages keeps what was built.
+- **Take the trivial lane.** That lane has no review, so it takes your word: you call the change trivial, or
+  you agree when `team-lead` asks.
+- **Move a request to a heavier lane.** A request that asks for a lighter lane than the conditions allow does
+  not start. `team-lead` names the condition and asks, unless the project's rule orders the move.
+- **Widen a fast path.** A stage that needs one more file gets it while the conditions still hold. Otherwise
+  the feature stops and you choose: all the stages, the fast path with your answer or a narrower change, or
+  stopping. A feature that moves to all the stages keeps what was built.
 
 ## Change the team
 
@@ -152,25 +152,14 @@ made and tested here first, and installed last:
 4. Commit, merge and push.
 
 Keep ledgers and handoffs that already exist readable: when a format changes, say how the old form is read, in
-the rules for what an agent reads and in `team-lead` for what it reads itself. When the rules change, raise
+the rules for what an agent reads and in `team-lead` for what it reads itself. Take that sentence out again once
+no feature in flight was started under the old form. When the rules change, raise
 `Pipeline Version` in `ai-team-pipeline.md`, and the same number in step 1 of `Setup` in `team-lead`, which
 names the version it is written for. Each ledger records the version its feature started under.
 
 `pwsh ./sync.ps1 save` copies the other way, from `~/.claude` into this repository, and removes here any team file
 that no longer exists there. Use it only to pick up an edit that was made directly in `~/.claude`. On a branch
 with changes that are not installed yet it would overwrite them.
-
-## Updating an older project
-
-A project set up before version 5.0 holds a full copy of the old rules at `.claude/ai-team-pipeline.md`. It keeps
-working as it is: `team-lead` uses that file as the project file, and only its `Project Paths` and
-`Overrides for this project` count. To slim it down:
-
-1. Create `.claude/ai-team-project.md` from `skills/team-lead/project-template.md`.
-2. Move the project's `Project Paths` and `Overrides for this project` into it.
-3. Fill in its `Workflow` and `Worktree setup` lines. The initiation file says what the second has to settle.
-4. In `CLAUDE.md`, import the new file in place of the old one.
-5. Delete `.claude/ai-team-pipeline.md`.
 
 ## Adding a role
 
@@ -195,7 +184,7 @@ this repository, on a branch, as "Change the team" says:
    those stages: the notes under the Routing Table, `Dispatch` in `team-lead`, and the worktree procedure.
 6. Give the new stage a number that leaves the others as they are. Projects key their gates and notes to stage
    numbers, and ledgers in flight list the stages by number.
-7. This README: the roster under "What is here" and the counts in the first paragraph.
+7. This README: the roster under "What is here" and every count of skills.
 8. Test, install, commit.
 
 To remove a role, take it out of the Routing Table, `team.json` and this repository. `install` never deletes, so

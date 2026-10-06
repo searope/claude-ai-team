@@ -62,9 +62,7 @@ branch and no ledger.
    feature, write the same into `History` when you create the ledger.
 
 A feature, on the fast path or in full, goes on with the next step of
-`Start a new feature`. Where this procedure has you ask, the user's answer
-needs no new command: take it from the conversation, and go on from the step
-that asked.
+`Start a new feature`.
 
 ---
 
@@ -81,7 +79,8 @@ dispatch, and no slug unless the project's rule for the lane needs one.
   and what the project's rule asks of it. Then make the change in the same
   turn, as the session and no longer as the orchestrator: the way the
   project's `Trivial Lane` rule says, or directly where the project has no
-  such rule. Nothing else in the skill applies to it.
+  such rule. Apart from `Leave` below, nothing else in the skill applies to
+  it.
 
 ---
 

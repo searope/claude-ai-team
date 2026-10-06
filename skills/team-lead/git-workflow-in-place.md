@@ -25,8 +25,11 @@ is not clean, list the uncommitted paths and do this:
   feature. Flag likely secrets (`.env`, key or credential files) and
   dependency or build directories that no `.gitignore` covers, and recommend
   leaving those out.
-- **On yes:** stage the paths you listed, less any the user left out, commit
-  with the message `Checkpoint before AI team feature`, and continue.
+- **On yes:** stage the paths you listed, less any the user left out, and
+  commit with the message `Checkpoint before AI team feature`. Then run the
+  status again. A path that it still lists keeps the feature from starting:
+  it has to be ignored by git, or the user deals with it. Name those paths,
+  and stop.
 - **On no:** stop. The feature does not start on a dirty tree.
 
 The feature's `Start Point` is `git rev-parse HEAD` once the tree is clean.
@@ -93,8 +96,9 @@ drop that stash and delete the feature's files under `.ai-team/`.
    `git stash pop <stash ref>`. If it does not apply cleanly, do not leave a
    half-applied state. Git keeps the stash in that case, so put the working
    tree back to the last commit: `git restore --staged --worktree -- .`, then
-   delete the untracked files `git status --porcelain` still lists (the tree
-   was clean before the pop, so they all came from it). Leave the feature
+   delete the untracked files that the pop brought: the ones that
+   `git status --porcelain --untracked-files=all` lists now and did not list
+   in `Start`. Delete nothing under `.claude/worktrees/`. Leave the feature
    shelved, tell the user which commit and file conflict, and stop.
 3. In the ledger set `Shelved Stash` to `none`, `Start Point` to the current
    `git rev-parse HEAD` and `Gate Status` to `IN_PROGRESS`. `Design Gate`

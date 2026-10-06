@@ -23,7 +23,8 @@ team and to explore ways to improve and extend it.
 
 The live copies are in `~/.claude/skills` and `~/.claude/agents`. A file there takes effect at once in every
 project that uses the team, including features in flight, and projects hold no copy of the rules. So do not edit
-the live copies. Follow "Change the team" in `README.md`:
+the live copies. The deny rules in `.claude/settings.json` refuse that to the file tools, and `sync.ps1 install` is
+the only thing that writes there. Follow "Change the team" in `README.md`:
 
 1. Edit the files in this repository, on a branch.
 2. Test them in a scratch project as project-level skills and agent types under other names, with headless
@@ -31,5 +32,5 @@ the live copies. Follow "Change the team" in `README.md`:
 3. Install with `pwsh ./sync.ps1 install` only when the user has agreed to go live.
 4. Never run `pwsh ./sync.ps1 save` on a branch with changes that are not installed: it overwrites them.
 
-When the pipeline rules change, raise `Pipeline Version`. When a skill changes, raise its `metadata.version`. Keep
-existing ledgers and handoffs readable.
+When the pipeline rules change, raise `Pipeline Version`, and the same number in step 1 of `Setup` in `team-lead`.
+When a skill changes, raise its `metadata.version`. Keep existing ledgers and handoffs readable.
