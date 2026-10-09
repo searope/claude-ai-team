@@ -120,7 +120,8 @@ cost, so that the user can choose another.
 - `Read` the template and `Write` it to `.claude/ai-team-project.md`, with the
   project's name in the title, those paths in `Project Paths`, the user's
   answer on the `Workflow` line and the result of step 2 on the
-  `Worktree setup` line. Change nothing else in the template.
+  `Worktree setup` line. Write `none` on the `Mock-up` line: its commands are
+  the user's to give. Change nothing else in the template.
 - Add the import. If `CLAUDE.md` exists in the project root, append the line
   `@.claude/ai-team-project.md` unless it is already there. If only
   `.claude/CLAUDE.md` exists, append `@ai-team-project.md` there. If neither
@@ -155,6 +156,10 @@ cost, so that the user can choose another.
 - The three lines of `Project Paths` as you wrote them. They decide what each
   build stage may write, so ask the user to check them. They can be corrected
   in the project file at any time.
+- The `Mock-up` line says `none`. With that, a feature that changes a screen
+  gets a sketch of its layout and no rendered mock-up. For mock-ups, the
+  user writes on that line how the product is built and served, the command
+  that takes a screenshot, which pages may be opened, and the widths.
 - **The repository has a remote:** a worktree starts from the remote's base
   branch, so it has the project file only once this commit is there. Until
   the user pushes the commit, or merges it there, no feature can run in a

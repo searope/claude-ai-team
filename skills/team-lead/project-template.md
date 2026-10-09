@@ -38,6 +38,18 @@ worktree of its own, in place in this folder, or `ask` each time. An `only`
 value forbids the other workflow. `Worktree setup` is what the agents follow
 in a worktree, which starts as a fresh checkout.
 
+## Mock-up
+
+- **Mock-up:** <`none`, or: the commands that build and serve the product in
+  the folder of a feature; the command that takes a screenshot of a page at
+  a width and writes it to a file; which pages may be opened; the widths>
+
+For a feature that changes a screen, the UI stage builds the product, takes a
+screenshot of the real page, makes a mock-up page from it and takes a
+screenshot of that. `team-lead` shows both when it asks for approval of the
+design. The stage runs only the commands written here and opens only the pages
+allowed here. With `none` it draws a sketch in the UI spec instead.
+
 ## Overrides for this project
 
 A rule written here wins over the matching default in the pipeline rules and

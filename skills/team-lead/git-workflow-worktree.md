@@ -150,7 +150,7 @@ Build the list from git, not from handoffs:
 - `git status --porcelain --untracked-files=all`: every uncommitted path, the
   partial work of an interrupted stage included.
 - `git log --oneline <base>..HEAD`: the commits on the feature's branch.
-- The feature's working files under `.ai-team/`: its handoffs, its change
+- The feature's working files under `.ai-team/`: its handoffs, its mock-up, its change
   record, your notes and its ledger. Git ignores them, so name them yourself.
 - Warn that a rollback deletes all of these for good, and that the list may
   hold edits the user made by hand. A shelved feature keeps everything.

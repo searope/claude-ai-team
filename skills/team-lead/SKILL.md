@@ -43,7 +43,7 @@ allowed-tools:
   - "PowerShell(git branch --list *)"
   - "PowerShell(gh issue view *)"
 metadata:
-  version: "10.5"
+  version: "10.6"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 
@@ -138,6 +138,8 @@ In the project:
   - one handoff per stage,
     `.ai-team/scratchpad/<feature-slug>-<name>-context.md`, where `<name>` is
     the stage's `Handoff` name in the `Routing Table`;
+  - the mock-up, `.ai-team/mockups/<feature-slug>/`, which the stage that
+    writes the `UI spec` keeps for the user (section 8);
   - the change record, `.ai-team/scratchpad/<feature-slug>-changes.md`;
   - your notes for the stages, `.ai-team/scratchpad/<feature-slug>-notes.md`
     (section 7).
@@ -224,7 +226,7 @@ of the stages are named: take everything about a stage from its row.
 ### 1. Setup
 Do this on every run.
 1. `Read` the rules file, unless this conversation already holds it at
-   `Pipeline Version` 7.4, the version this skill is written for.
+   `Pipeline Version` 7.5, the version this skill is written for.
 2. Check git: run `git rev-parse --is-inside-work-tree`, and note whether
    `git status --porcelain` is empty. If the project is not a repository, tell
    the user and run `git init`.
@@ -524,8 +526,20 @@ to `PENDING`, and the user approves again before a build stage runs.
   in each other's artifacts: the user can have them changed. Set
   `AWAITING_USER`, ask the user to approve, request changes, or stop the
   feature, and stop.
+- **Show the mock-up:** a feature whose UI stage ran has a mock-up (rules:
+  `Artifact Contracts`), or a handoff that says why it has none. `Glob` its
+  folder. For each screen and width, put the screenshot of the real page and
+  the one of the mock-up in front of the user, `before` first: with a tool
+  that sends or shows a file to the user where the session has one, and
+  always as links to the files, with the link to the mock-up page. You look
+  at none of the images yourself: the user judges them. With no mock-up, say
+  which case the handoff gives and what it leads to: the design shows its
+  layout as a sketch in the UI spec, and the user can order the mock-up,
+  which is a change request to that stage. Where the case is a project file
+  with no `Mock-up` line, say that the line is the user's to add.
 - **Re-opened:** when the gate is `PENDING` again after an earlier approval,
-  lead the summary with what changed since that approval and why.
+  lead the summary with what changed since that approval and why. Show the
+  mock-up again when the UI stage ran since.
 - **Approval:** counts only while the gate is open, which is when
   `Gate Status` is `AWAITING_USER` and every design stage is `DONE` or
   `SKIPPED`. `continue` is not an approval. Then set `Design Gate` to
