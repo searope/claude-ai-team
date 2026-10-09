@@ -54,7 +54,7 @@ interrupted stage is included:
   untracked path.
 - `git log <Start Point>..HEAD`: commits made since the feature started. You
   cannot undo those; name them and leave them to the user.
-- The feature's working files under `.ai-team/`: its handoffs, its change
+- The feature's working files under `.ai-team/`: its handoffs, its mock-up, its change
   record, your notes and its ledger. Git ignores them, so name them yourself.
 - Warn that a rollback deletes uncommitted work for good, and that the list
   may hold edits the user made by hand since the feature started. Those go too

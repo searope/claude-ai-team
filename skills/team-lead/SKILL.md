@@ -43,7 +43,7 @@ allowed-tools:
   - "PowerShell(git branch --list *)"
   - "PowerShell(gh issue view *)"
 metadata:
-  version: "10.5"
+  version: "10.6"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 
@@ -73,7 +73,8 @@ Arguments: $ARGUMENTS
   `git worktree list` shows the worktree whose branch is `agent/<slug>`: move
   the session there with the `EnterWorktree` tool and its `path`, or tell the
   user which folder to open. Anything after the slug is the user's direction:
-  - `approve`, or a change request: an answer at the design gate.
+  - `approve`, or a change request: an answer at the mock-up gate or the
+    design gate, whichever is open.
   - `continue`, with or without an answer: the feature is `BLOCKED` and the
     user has dealt with what blocked it. Other text while the feature is
     `BLOCKED` is the user's answer, not a change request.
@@ -138,6 +139,8 @@ In the project:
   - one handoff per stage,
     `.ai-team/scratchpad/<feature-slug>-<name>-context.md`, where `<name>` is
     the stage's `Handoff` name in the `Routing Table`;
+  - the mock-up, `.ai-team/mockups/<feature-slug>/`, which the stage that
+    writes the `UI spec` keeps for the user (section 8);
   - the change record, `.ai-team/scratchpad/<feature-slug>-changes.md`;
   - your notes for the stages, `.ai-team/scratchpad/<feature-slug>-notes.md`
     (section 7).
@@ -209,7 +212,8 @@ of the stages are named: take everything about a stage from its row.
 - A stage owns the area it writes: whatever is blocked on that area is routed
   to it (section 5).
 - The stages up to Architecture are the design stages, and the ones after it
-  are the build stages. The design gate sits between them (section 8).
+  are the build stages. The design gate sits between them, and the mock-up
+  gate directly after UI/UX (section 8).
 - Discovery runs in this conversation, because it is a dialogue with the
   user. Every other stage that a skill carries out runs isolated.
 - Merge is `Deliver` of the feature's git workflow. It waits until every
@@ -224,7 +228,7 @@ of the stages are named: take everything about a stage from its row.
 ### 1. Setup
 Do this on every run.
 1. `Read` the rules file, unless this conversation already holds it at
-   `Pipeline Version` 7.4, the version this skill is written for.
+   `Pipeline Version` 7.5, the version this skill is written for.
 2. Check git: run `git rev-parse --is-inside-work-tree`, and note whether
    `git status --porcelain` is empty. If the project is not a repository, tell
    the user and run `git init`.
@@ -293,7 +297,8 @@ Do this on every run.
    project's `Git Workflow` override replaces all of it, and carry out its
    `Start`.
 6. **The ledger.** Create it now, with the workflow and the `Start Point`
-   that `Start` gave you. Every stage is `PENDING`. On a fast path, the
+   that `Start` gave you. Every stage is `PENDING`, and so is
+   `Mock-up Gate`. On a fast path, the
    stages the override skips are `SKIPPED`, and so is a stage whose
    `Runs when` condition reads an artifact the fast path does not produce;
    `Design Gate` is `SKIPPED (fast path)`; and the `Fast Path` section holds
@@ -335,6 +340,9 @@ Walk the `Routing Table` from the top and bring the ledger up to date.
   the one in `Approved Design`, set the gate to `PENDING`. If the current
   stage is a build stage and `Design Gate` is `PENDING`, go to section 8 and
   dispatch nothing.
+- **Mock-up gate:** `Mock-up Gate` is `SKIPPED` while the stage that writes
+  the `UI spec` is `SKIPPED`. Once that stage is `DONE` and the gate is
+  `PENDING`, go to the mock-up gate in section 8 and dispatch nothing.
 - **No report:** a stage that returned with no handoff for the current round
   is dispatched once more. If it still has none, set `BLOCKED` and tell the
   user what the stage returned.
@@ -419,6 +427,7 @@ Rewrite the ledger after every evaluation. Start `History` with the
 - **Round:** <starts at 0>
 - **Backward Routes:** <tests n/3, security n/3, escalations n/5>
 - **Design Gate:** <PENDING | APPROVED | SKIPPED (fast path)>
+- **Mock-up Gate:** <PENDING | APPROVED | SKIPPED>
 - **Approved Design:** <`none`, or the revisions approved, e.g. spec r1, ADR r1>
 - **Workflow:** <`in-place`, or `worktree, base <branch>`>
 - **Start Point:** <hash of the commit the feature's changes are counted from>
@@ -524,6 +533,8 @@ to `PENDING`, and the user approves again before a build stage runs.
   in each other's artifacts: the user can have them changed. Set
   `AWAITING_USER`, ask the user to approve, request changes, or stop the
   feature, and stop.
+- **The mock-up at this gate:** the user approved it at the mock-up gate
+  below. Give the links to its files in one line, and do not show it again.
 - **Re-opened:** when the gate is `PENDING` again after an earlier approval,
   lead the summary with what changed since that approval and why.
 - **Approval:** counts only while the gate is open, which is when
@@ -543,6 +554,39 @@ to `PENDING`, and the user approves again before a build stage runs.
 - **No gate on a fast path:** a feature whose `Design Gate` is
   `SKIPPED (fast path)` has no gate to open. It keeps that value where a
   procedure sets the gate to `PENDING`, as on shelving and on resuming.
+
+**The mock-up gate.** The user sees the mock-up of a feature (rules:
+`Artifact Contracts`) and approves it before any later stage works on the
+feature. It comes directly after the stage that writes the `UI spec`, and
+the design gate above still follows.
+- **Open it:** `Glob` the folder of the mock-up. For each screen and width,
+  put the screenshot of the real page and the one of the mock-up in front of
+  the user, `before` first: with a tool that sends or shows a file to the
+  user where the session has one, and always as links to the files, with the
+  link to the mock-up page. You look at none of the images yourself: the
+  user judges them. Add what the stage's handoff remarks on. Where
+  screenshots are missing, say which case the handoff gives and what it
+  leads to: the user opens the mock-up page in a browser to see it, and the
+  stage did not see it rendered. Where the case is a project file with no
+  `Mock-up` line, say that the line is the user's to add, and what it gives:
+  the real page beside the mock-up, and a render the stage has checked. Set
+  `AWAITING_USER`, ask the user to approve the look, request changes, or
+  stop the feature, and stop.
+- **Approval:** counts only while this gate is open, which is when
+  `Gate Status` is `AWAITING_USER` and `Mock-up Gate` is `PENDING` with its
+  stage `DONE`. `continue` is not an approval. Set `Mock-up Gate` to `APPROVED` and carry on with the next
+  stage. It approves the look only: the design gate is still to come.
+- **Change request:** as at the design gate: a backward route to the stage
+  that writes the area it affects, which counts toward no cap.
+- **It holds while the mock-up stays as it is.** When the stage runs again
+  after an approval, read in its handoff whether the mock-up changed. If it
+  did, set the gate to `PENDING`; if only the UI spec changed, the approval
+  stands.
+- **No mock-up, no gate:** the gate is `SKIPPED` while the stage is
+  `SKIPPED`, and for a feature whose mock-up folder holds no page, which
+  has a sketch in its UI spec: the design gate shows that. A ledger with no
+  `Mock-up Gate` line is of a feature that started before this gate
+  existed: it has none.
 
 ### 9. Git workflow
 The procedure of the feature's workflow says how each step is done. These

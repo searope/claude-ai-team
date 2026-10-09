@@ -10,7 +10,7 @@ and merge.
   stage and no file location. What it builds on, where it reports and which rules bind it reach it in its
   dispatch, so it runs only when the pipeline dispatches it. The only paths a skill still knows are in the
   `allowed-tools` of the four design skills, which pre-approve writes in their own folder and in the handoff
-  folder.
+  folder, and for `ui-designer` in the mock-up folder.
 - The eight specialist skills are hidden from the slash-command menu, with `user-invocable: false` in their
   frontmatter. `/team-lead` is the only command of the team that you type; it calls the others. The model can
   still call a hidden skill, and a call that carries no dispatch is refused: by the skill's agent type, or by
@@ -37,6 +37,12 @@ and merge.
   as what makes a test count, is in the Artifact Contracts of the rules and in neither skill.
 - A **project file**, `.claude/ai-team-project.md`, is all a project holds: its source, test and infra paths, its
   git workflow settings, its overrides of the rules, and a few lines that say when the pipeline applies.
+- A feature that changes a screen gets a **mock-up**: `ui-designer` builds the product, takes a screenshot of the
+  real page, makes a mock-up page from it and checks its own render. `team-lead` then shows you the two
+  screenshots side by side and waits for your approval of the look, before the architecture stage runs. The project file's `Mock-up` line gives the build and
+  screenshot commands, the pages that may be opened and the widths; with `none` there, the designer still makes
+  the mock-up page, without screenshots, and never ASCII art. The mock-up lives in `.ai-team/mockups/<feature-slug>/` and is not committed:
+  the later stages build from the UI spec alone.
 - A request takes one of three **lanes**: all the stages, a **fast path** that skips the stages a project
   names, or the **trivial lane**, in which the change is made directly with no stage and no review. `team-lead`
   chooses the lane when a request starts. "Lighter lanes" below says how.
@@ -66,8 +72,9 @@ and merge.
   calls itself trivial.
 - `agents/`: three agent types that fix which tools a skill gets. Every skill except `team-lead` and
   `product-manager` runs as one of them.
-  - `ai-team-author`: file tools and no shell. Used by `copywriter`, `ui-designer` and `system-architect`.
-  - `ai-team-builder`: file tools and a shell. Used by `software-engineer`, `devops-engineer` and `test-engineer`.
+  - `ai-team-author`: file tools and no shell. Used by `copywriter` and `system-architect`.
+  - `ai-team-builder`: file tools and a shell. Used by `ui-designer`, `software-engineer`, `devops-engineer` and
+    `test-engineer`. The designer's shell is for the project's build and screenshot commands only.
   - `ai-team-auditor`: read only, no shell and no file writing. Used by `security-reviewer`.
 - `team.json`: the team roster. It names every skill and agent type that belongs to the team.
 - `sync.ps1`: copies these files to and from Claude Code's own folders.
@@ -144,10 +151,10 @@ made and tested here first, and installed last:
    `.claude/skills/<name>-next/` and each agent type as `.claude/agents/<name>-next.md`, with every team name
    changed to its `-next` form in all of those files. Run it there with `claude -p`, starting from
    `/team-lead-next`, with file edits accepted and with the git commands and the shell commands of the build
-   stages allowed (`--allowedTools`). A headless run cannot write under `.claude/`, so put the project file
-   into the scratch project by hand. The first stage is a dialogue: answer it in continued turns
-   (`--continue`). A project-level skill or agent type is seen only by that project, and the renamed Routing
-   Table dispatches the renamed skills, so the live team takes no part in the test.
+   stages and of the project's `Mock-up` line allowed (`--allowedTools`). A headless run cannot write under
+   `.claude/`, so put the project file into the scratch project by hand. The first stage is a dialogue: answer
+   it in continued turns (`--continue`). A project-level skill or agent type is seen only by that project, and
+   the renamed Routing Table dispatches the renamed skills, so the live team takes no part in the test.
 3. Run `pwsh ./sync.ps1 check` to see what `install` would change, then `pwsh ./sync.ps1 install`.
 4. Commit, merge and push.
 
