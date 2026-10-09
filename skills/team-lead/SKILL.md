@@ -43,7 +43,7 @@ allowed-tools:
   - "PowerShell(git branch --list *)"
   - "PowerShell(gh issue view *)"
 metadata:
-  version: "10.6"
+  version: "10.7"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 
@@ -228,7 +228,7 @@ of the stages are named: take everything about a stage from its row.
 ### 1. Setup
 Do this on every run.
 1. `Read` the rules file, unless this conversation already holds it at
-   `Pipeline Version` 7.5, the version this skill is written for.
+   `Pipeline Version` 7.6, the version this skill is written for.
 2. Check git: run `git rev-parse --is-inside-work-tree`, and note whether
    `git status --porcelain` is empty. If the project is not a repository, tell
    the user and run `git init`.
@@ -563,8 +563,14 @@ the design gate above still follows.
   put the screenshot of the real page and the one of the mock-up in front of
   the user, `before` first: with a tool that sends or shows a file to the
   user where the session has one, and always as links to the files, with the
-  link to the mock-up page. You look at none of the images yourself: the
-  user judges them. Add what the stage's handoff remarks on. Where
+  link to the mock-up page. Before the images of each screen, write what
+  they show: which screen it is, what the feature changes on it and where
+  to look, and which state is shown. Take this from the `## Mock-up` part
+  of the stage's handoff, and say which image is the page as it is and
+  which is the mock-up. No image goes to the user without these words. If
+  the handoff lacks them for a screen, say so and name the request the
+  feature started from in their place. You look at none of the images
+  yourself: the user judges them. Add what the stage's handoff remarks on. Where
   screenshots are missing, say which case the handoff gives and what it
   leads to: the user opens the mock-up page in a browser to see it, and the
   stage did not see it rendered. Where the case is a project file with no

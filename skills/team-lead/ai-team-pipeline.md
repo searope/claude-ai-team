@@ -1,6 +1,6 @@
 # AI Team Pipeline: Rules for Every Agent
 
-**Pipeline Version:** 7.5
+**Pipeline Version:** 7.6
 
 Feature work runs through a pipeline of stages. Each stage is the work of one
 skill, carried out by an agent that the orchestrator dispatches. The
@@ -231,7 +231,12 @@ Loading, Ideal, Overflow, Degraded and Error.
 - A drawing in text, such as ASCII art, never stands in for the mock-up.
   Only a screen that no browser can render, such as one in a terminal, has
   no mock-up page: the UI spec then holds a sketch of its layout.
-- The handoff names every file of the mock-up. On a later run of the stage
+- The handoff names every file of the mock-up, under the heading
+  `## Mock-up`. With each screen it says in plain words what the user is
+  looking at: which screen of the product it is, what the feature changes on
+  it and where on the page that is, and which state the page shows. The
+  user reads this beside the images, so it is written for someone who has
+  not read the UI spec. On a later run of the stage
   it says whether the mock-up changed: the user's approval of it holds only
   while it stays as it is.
 

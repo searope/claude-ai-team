@@ -19,7 +19,7 @@ allowed-tools:
   - "Edit(.ai-team/scratchpad/**)"
   - "Edit(.ai-team/mockups/**)"
 metadata:
-  version: "7.0"
+  version: "7.1"
   role: "Principal UI/UX Designer"
 ---
 
@@ -111,4 +111,7 @@ project has a design system, use it and specify only what is new:
 Write the UI spec, carrying what the Artifact Contracts require of a UI spec.
 Compare it with the mock-up once more and make the two agree. Then write your
 handoff. It names the mock-up's files and, where screenshots are missing, the
-case that kept you from taking them.
+case that kept you from taking them. For each screen it tells the user in
+two or three plain sentences what they are looking at: which screen it is,
+what changed against the page as it is and where on the page, and which
+state is shown.
