@@ -38,10 +38,10 @@ and merge.
 - A **project file**, `.claude/ai-team-project.md`, is all a project holds: its source, test and infra paths, its
   git workflow settings, its overrides of the rules, and a few lines that say when the pipeline applies.
 - A feature that changes a screen gets a **mock-up**: `ui-designer` builds the product, takes a screenshot of the
-  real page, makes a mock-up page from it and checks its own render. `team-lead` shows the two screenshots side
-  by side when it asks you to approve the design. The project file's `Mock-up` line gives the build and
-  screenshot commands, the pages that may be opened and the widths; with `none` there, the designer draws a
-  sketch in the UI spec instead. The mock-up lives in `.ai-team/mockups/<feature-slug>/` and is not committed:
+  real page, makes a mock-up page from it and checks its own render. `team-lead` then shows you the two
+  screenshots side by side and waits for your approval of the look, before the architecture stage runs. The project file's `Mock-up` line gives the build and
+  screenshot commands, the pages that may be opened and the widths; with `none` there, the designer still makes
+  the mock-up page, without screenshots, and never ASCII art. The mock-up lives in `.ai-team/mockups/<feature-slug>/` and is not committed:
   the later stages build from the UI spec alone.
 - A request takes one of three **lanes**: all the stages, a **fast path** that skips the stages a project
   names, or the **trivial lane**, in which the change is made directly with no stage and no review. `team-lead`

@@ -78,8 +78,8 @@ Arguments: $ARGUMENTS
 Design what the feature adds or changes, across these pillars. Where the
 project has a design system, use it and specify only what is new:
 1. **Mock-up:** For every screen the feature adds or changes, make the
-   mock-up that the Artifact Contracts describe, unless one of the cases they
-   name keeps you from it. Do not draw ASCII art in place of it.
+   mock-up that the Artifact Contracts describe. A mock-up page is the
+   default in every project: never draw ASCII art in place of it.
    - **Start from the real page.** Build the product and take a screenshot
      of the page as it is, at each width the project file gives. Look at the
      images, and read the page's markup and styles.
@@ -91,8 +91,11 @@ project has a design system, use it and specify only what is new:
      cut off or overflows, and nothing changed that the feature does not
      change. Correct the page and render it again, at most twice. What is
      still wrong then, say in your handoff.
-   - **When no mock-up can be made,** sketch the layout in the UI spec
-     instead.
+   - **When a screenshot cannot be taken,** in one of the cases the
+     Artifact Contracts name, make the mock-up page all the same, from the
+     page's markup and styles as the project's files hold them. Leave out
+     the screenshots you cannot take, and go over the page's markup and
+     styles once more by reading, since you cannot see it.
 2. **Layout:** Describe the layout of each screen in words and tables, at
    each width: the regions, their order, and what moves or collapses. Whoever
    builds the feature reads this and never sees the mock-up, so it must hold
@@ -107,5 +110,5 @@ project has a design system, use it and specify only what is new:
 ### Phase 3: Completion
 Write the UI spec, carrying what the Artifact Contracts require of a UI spec.
 Compare it with the mock-up once more and make the two agree. Then write your
-handoff. It names the mock-up's files, or the case that kept you from making
-one.
+handoff. It names the mock-up's files and, where screenshots are missing, the
+case that kept you from taking them.

@@ -46,9 +46,10 @@ in a worktree, which starts as a fresh checkout.
 
 For a feature that changes a screen, the UI stage builds the product, takes a
 screenshot of the real page, makes a mock-up page from it and takes a
-screenshot of that. `team-lead` shows both when it asks for approval of the
-design. The stage runs only the commands written here and opens only the pages
-allowed here. With `none` it draws a sketch in the UI spec instead.
+screenshot of that. `team-lead` shows both and waits for the user's approval
+of the look before the next stage runs. The stage runs only the commands written here and opens only the pages
+allowed here. With `none` it still makes the mock-up page, from the project's
+files, but takes no screenshots and cannot check how the page renders.
 
 ## Overrides for this project
 

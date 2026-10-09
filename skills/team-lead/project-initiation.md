@@ -157,9 +157,11 @@ cost, so that the user can choose another.
   build stage may write, so ask the user to check them. They can be corrected
   in the project file at any time.
 - The `Mock-up` line says `none`. With that, a feature that changes a screen
-  gets a sketch of its layout and no rendered mock-up. For mock-ups, the
-  user writes on that line how the product is built and served, the command
-  that takes a screenshot, which pages may be opened, and the widths.
+  gets a mock-up page that the user opens in a browser, with no screenshots
+  and no check of how it renders. For a screenshot of the real page beside
+  one of the mock-up, the user writes on that line how the product is built
+  and served, the command that takes a screenshot, which pages may be
+  opened, and the widths.
 - **The repository has a remote:** a worktree starts from the remote's base
   branch, so it has the project file only once this commit is there. Until
   the user pushes the commit, or merges it there, no feature can run in a

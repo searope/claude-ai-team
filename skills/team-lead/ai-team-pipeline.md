@@ -48,7 +48,7 @@ things in it:
   which widths. The stage that makes the mock-up runs these commands as they
   are written and opens no page the line does not allow. A project file
   that has no such line, or whose line says `none`, gives no way to render a
-  page.
+  page: the mock-up is then made without screenshots.
 - **Overrides for this project:** the project's own rules (§6).
 
 ---
@@ -207,7 +207,7 @@ Loading, Ideal, Overflow, Degraded and Error.
 - The layout of every screen that the feature adds or changes is described
   in words and tables, at each width it is designed for. The later stages
   build from the UI spec alone: it holds no image and names no file of the
-  mock-up. It holds a drawing only where no mock-up was made.
+  mock-up. It holds a drawing only for a screen that has no mock-up page.
 
 **Mock-up**
 - A page that a browser renders, one for each screen that the feature adds
@@ -221,12 +221,19 @@ Loading, Ideal, Overflow, Degraded and Error.
 - It is shown to the user with the design and is no contract. Where it and
   the UI spec differ, the UI spec counts, and its writer makes the two agree
   before reporting.
-- No mock-up is made in these cases, and in no other: the project file gives
-  no way to render a page; a command of its `Mock-up` line failed twice, or
-  was cut off; or the line does not allow the page to be opened. The UI spec
-  then holds a sketch of the layout, the handoff says which case it was, and
-  the stage is complete all the same. The user can still order the mock-up.
-- The handoff names every file of the mock-up.
+- The mock-up page is made in every project. What can fall away is a
+  screenshot, in these cases and in no other: the project file gives no way
+  to render a page; a command of its `Mock-up` line failed twice, or was cut
+  off; or the line does not allow the real page to be opened. The page is
+  then made from the files of the project, the screenshots that could not be
+  taken are left out, and the handoff says which case it was and that the
+  page was not seen rendered. The stage is complete all the same.
+- A drawing in text, such as ASCII art, never stands in for the mock-up.
+  Only a screen that no browser can render, such as one in a terminal, has
+  no mock-up page: the UI spec then holds a sketch of its layout.
+- The handoff names every file of the mock-up. On a later run of the stage
+  it says whether the mock-up changed: the user's approval of it holds only
+  while it stays as it is.
 
 **ADR**
 - `- **Revision:** <n>` directly under the title, as for the spec.
