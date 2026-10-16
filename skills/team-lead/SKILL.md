@@ -43,7 +43,7 @@ allowed-tools:
   - "PowerShell(git branch --list *)"
   - "PowerShell(gh issue view *)"
 metadata:
-  version: "10.7"
+  version: "10.8"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 
@@ -216,6 +216,12 @@ of the stages are named: take everything about a stage from its row.
   gate directly after UI/UX (section 8).
 - Discovery runs in this conversation, because it is a dialogue with the
   user. Every other stage that a skill carries out runs isolated.
+- Discovery always asks its questions at the start (rules, section 6). A
+  project rule that has the stages ask the user nothing does not reach it, so
+  never dispatch it to settle the user's decisions itself. On a lane without
+  Discovery, put the decisions the request leaves to the user to the user
+  yourself before the first stage. An isolated stage that reports one gets its
+  answer from the user through you.
 - Merge is `Deliver` of the feature's git workflow. It waits until every
   stage before it is `DONE` or `SKIPPED`: Security is `DONE` when it reports
   `PASS` in the current round. Merge itself is `DONE` once `Deliver` has set
@@ -228,7 +234,7 @@ of the stages are named: take everything about a stage from its row.
 ### 1. Setup
 Do this on every run.
 1. `Read` the rules file, unless this conversation already holds it at
-   `Pipeline Version` 7.6, the version this skill is written for.
+   `Pipeline Version` 7.7, the version this skill is written for.
 2. Check git: run `git rev-parse --is-inside-work-tree`, and note whether
    `git status --porcelain` is empty. If the project is not a repository, tell
    the user and run `git init`.

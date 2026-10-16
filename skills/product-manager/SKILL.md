@@ -15,7 +15,7 @@ allowed-tools:
   - "Edit(docs/specs/**)"
   - "Edit(.ai-team/scratchpad/**)"
 metadata:
-  version: "8.2"
+  version: "8.3"
   role: "Principal Product Manager"
 ---
 
@@ -70,7 +70,11 @@ request.
    in text, then wait for the answer.
 3. When the request came from an issue, treat what it says as the starting
    point. The scope is what the user confirms to you.
-4. Before you write the spec, state the scope as you understand it, what is
+4. Ask at the start of every feature, whatever the project's rules or the
+   dispatch say about questions (rules, section 6): what the request leaves
+   open, and every decision it leaves to the user. Never settle those
+   yourself, also when the request was written by Claude.
+5. Before you write the spec, state the scope as you understand it, what is
    in and what is out, and have the user confirm it in the same way.
 
 ### Phase 2: Spec Authoring

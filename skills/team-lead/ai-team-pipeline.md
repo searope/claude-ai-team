@@ -1,6 +1,6 @@
 # AI Team Pipeline: Rules for Every Agent
 
-**Pipeline Version:** 7.6
+**Pipeline Version:** 7.7
 
 Feature work runs through a pipeline of stages. Each stage is the work of one
 skill, carried out by an agent that the orchestrator dispatches. The
@@ -445,12 +445,21 @@ Overrides may cover:
   change is no work of the pipeline: it has no stage and no dispatch, and
   these rules, which bind agents, do not reach it.
 
+**Questions at the start.** Discovery asks the user its questions at the start
+of every feature that runs it: what the request leaves open, and every
+decision the request or its issue leaves to the user. No project rule makes
+it ask nothing or settle those itself, whoever wrote the request. On a lane
+without Discovery, the decisions the request leaves to the user are still put
+to the user before the first stage. An isolated agent that meets one reports
+it (§5).
+
 `Fast Path` and `Trivial Lane` are a project's lighter lanes. The
 orchestrator chooses the lane of each request by their conditions. A request
 that meets neither runs through all the stages.
 
 Overrides may not relax Write Isolation (§2), the rules for tools and the
 shell (§3), the handoff block (§5), the design gate of a feature that gets an
-ADR, the rule that the user chooses how a feature is stopped and confirms
+ADR, the questions at the start (above), the rule that the
+user chooses how a feature is stopped and confirms
 before anything is deleted, or the rule that a change takes the trivial lane
 only when the user has called it trivial or agreed to that lane.
