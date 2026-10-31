@@ -32,8 +32,8 @@ Two facts are used throughout:
      user or the project file asked for a worktree, which is what that tool
      requires. Claude Code may show the user a window to confirm; wait for it.
    - **The session is already in a worktree:** use it, if
-     `git status --porcelain` prints nothing and no ledger there is
-     `IN_PROGRESS`, `AWAITING_USER` or `BLOCKED`. Otherwise stop: tell the
+     `git status --porcelain` prints nothing and `ai_team status` lists no
+     `active` feature there. Otherwise stop: tell the
      user that this worktree is taken and by what, and to start the feature
      from the main folder or from a new session.
    - **The session cannot be moved** (the tool is missing, it fails, or the
@@ -56,8 +56,8 @@ Two facts are used throughout:
    worktree lacks. If it is not `0`, run `git merge <base>`.
 4. **Make the feature's branch:** `git switch -c agent/<feature-slug>`, unless
    `git branch --show-current` already prints that name.
-5. The feature's `Start Point` is `git rev-parse HEAD` now. Record the
-   workflow in the ledger as `worktree`, with the base branch.
+5. The feature's `Start Point` is `git rev-parse HEAD` now. Give it to
+   `ai_team new` with `--workflow worktree --base <base>`.
 
 ---
 
@@ -85,7 +85,10 @@ The messages are:
 
 ## Update
 
-Do this before each run of Testing, on `sync`, and at the start of a resume.
+Do this before each run of Testing (the action `update` says when), on
+`sync`, and at the start of a resume. Add `--dispatch` to the `ai_team`
+commands below only when the action `update` sent you here; on `sync` and on a
+resume, step 7 comes first, and then `ai_team next <slug> --dispatch`.
 
 If a merge is already in progress, do not start again:
 `git rev-parse --verify --quiet MERGE_HEAD` prints a hash then. The conflicts
@@ -94,50 +97,50 @@ are with the stages they were routed to until each of those has reported
 
 1. In a repository with a remote, run `git fetch origin`.
 2. Run `git rev-list --count HEAD..<base>`. If it prints `0`, the branch is up
-   to date: note it in `History`, and you are done.
+   to date: run `ai_team updated <slug>`, and you are done.
 3. Commit the work so far (see Commit), if there is any.
 4. Merge the base branch into the feature's branch. In the desktop app, in a
    worktree the app made, use the app's own tool for bringing a branch up to
    date with its base. Otherwise run `git merge <base>`. Never rebase.
-5. **The merge is clean:** set `Start Point` in the ledger to
-   `git rev-parse <base>`, the base commit you merged, so that the change
-   record still shows only the feature's own changes. Add a `History` line.
+5. **The merge is clean:** run `ai_team updated <slug> --start-point <hash>`,
+   with the hash `git rev-parse <base>` prints: the base commit you merged
+   becomes the `Start Point`, so that the change record still shows only the
+   feature's own changes.
 6. **The merge stops on a conflict:** do not resolve it yourself, and do not
-   abort it. `git status --porcelain` lists the conflicting files. Each one is
-   a defect in the area it lies in. Route each to the stage that writes its
-   area, with the direction
-   `Resolve the merge conflict with <base> in <files>`. This is a backward
-   route: `Round` goes up, but it counts toward no cap. A conflicting file
-   that lies in no area is the user's to resolve: set `BLOCKED` and name the
-   file. As soon as every stage that a conflict was routed to has reported
-   `DONE`, and before any other stage runs, complete the merge. Note the
-   hash that `git rev-parse MERGE_HEAD` prints: it is the base commit being
-   merged. Stage the resolved files by name, and check that
-   `git diff --name-only --diff-filter=U` prints nothing. Then run
-   `git commit --no-edit` and do step 5, with that hash as the
-   `Start Point`.
+   abort it. Run `ai_team route-conflicts <slug> --base <base> --dispatch`. It
+   routes each conflicting file to the stage that writes its area, with the
+   direction `Resolve the merge conflict with <base> in <files>`, as a
+   backward route that counts toward no cap, and blocks on the user for a file
+   that lies in no area. When an action is `complete_merge`, and before any
+   other stage runs, complete the merge: stage the resolved files by name,
+   check that `git diff --name-only --diff-filter=U` prints nothing, run
+   `git commit --no-edit`, then `ai_team merged <slug> --dispatch`: the base
+   commit that was merged becomes the `Start Point`.
 7. **On `sync` or on a resume, when Testing has already run:** if the merge
-   brought changes in, it is a backward route to Testing that counts toward
-   no cap. If it brought nothing, say so and change nothing.
+   brought changes in, run `ai_team route-back <slug> --stage 7 --reason "the
+   base branch brought changes in" --dispatch`: a backward route to Testing
+   that counts toward no cap. If it brought nothing, say so and change nothing.
 
 ---
 
 ## Deliver
 
-1. Run `git status --porcelain --untracked-files=all`. Every path it lists
-   must be in the change record the reviewer just passed. If one is not,
-   something changed after the review: do not commit. It is a backward route
-   to Security that counts toward no cap: `Round` goes up, and you write a new
-   change record and run Security again. If it happens twice in a row, set
-   `BLOCKED` and name the paths that keep changing.
-2. Commit those paths (see Commit), and name the commit in `History`: it is
-   the delivered commit.
-3. Check the base once more with steps 1 and 2 of Update. If the base has
-   commits the branch lacks, do not merge them. Say in your report how many
-   there are, and that `/team-lead <feature-slug> sync` brings them in and
-   runs Testing and Security again.
-4. Set `READY_FOR_MERGE`. Tell the user the name of the branch and what is
-   left to them: merge it into the base branch, or push it and open a pull
+1. Run `ai_team verify-delivery <slug>`. It compares the change record the
+   reviewer passed with one taken now. If `unchanged` is false, something
+   changed after the review (`changed_paths`): do not commit. Run
+   `ai_team review-again <slug> --dispatch`: a backward route to Security that
+   counts toward no cap, with a new change record. The second time in a row it
+   sets `BLOCKED` and names the paths that keep changing.
+2. Commit the paths that `git status --porcelain --untracked-files=all` lists
+   (see Commit). That commit is the delivered commit.
+3. Check the base once more with steps 1 and 2 of Update, without running
+   `ai_team updated`. If the base has commits the branch lacks, do not merge
+   them. Say in your report how many there are, and that
+   `/team-lead <feature-slug> sync` brings them in and runs Testing and
+   Security again.
+4. Run `ai_team delivered <slug> --commit <the delivered commit>`: the feature
+   is `READY_FOR_MERGE`. Tell the user the name of the branch and what is left
+   to them: merge it into the base branch, or push it and open a pull
    request, and remove the worktree afterwards.
 
 ---
@@ -146,12 +149,13 @@ are with the stages they were routed to until each of those has reported
 
 Present the two options, a rollback or shelving, together with what would be
 lost, and wait for the answer (use `AskUserQuestion` when it is available).
-Build the list from git, not from handoffs:
-- `git status --porcelain --untracked-files=all`: every uncommitted path, the
-  partial work of an interrupted stage included.
-- `git log --oneline <base>..HEAD`: the commits on the feature's branch.
-- The feature's working files under `.ai-team/`: its handoffs, its mock-up, its change
-  record, your notes and its ledger. Git ignores them, so name them yourself.
+Build the list with `ai_team stop-list <slug>`, which takes it from git, not
+from handoffs:
+- `uncommitted`: every uncommitted path, the partial work of an interrupted
+  stage included.
+- `commits`: the commits on the feature's branch (`<base>..HEAD`).
+- `working_files`: the feature's files under `.ai-team/`, which git ignores:
+  its ledger, handoffs, mock-up, change record, notes and snapshots.
 - Warn that a rollback deletes all of these for good, and that the list may
   hold edits the user made by hand. A shelved feature keeps everything.
 
@@ -165,8 +169,8 @@ the list and get a confirmation first.
    path on the list.
 3. Leave the feature's branch and delete it: `git switch --detach <base>`,
    then `git branch -D agent/<feature-slug>`.
-4. Delete the feature's handoffs, its change record and your notes, then its
-   ledger.
+4. Run `ai_team purge <slug> --confirm`: it deletes the feature's working
+   files under `.ai-team/`, its ledger last.
 5. Run `git status --porcelain` and confirm that nothing of the feature is
    left. Tell the user the worktree folder is still there and can be removed.
 
@@ -174,9 +178,8 @@ the list and get a confirmation first.
 1. If a merge is in progress, run `git merge --abort`: the base is merged
    again when the feature is resumed. Then commit the work so far (see
    Commit), if there is any.
-2. In the ledger set `Gate Status` to `REJECTED` and `Design Gate` to
-   `PENDING`. Add a `History` line with the stage the feature stopped at and
-   the reason.
+2. Run `ai_team set <slug> --gate-status REJECTED --design-gate-pending
+   --history "Shelved at <stage>: <reason>"`.
 3. Tell the user three things: the work is committed on
    `agent/<feature-slug>`; the ledger and the handoffs are only in this
    worktree's `.ai-team/`, so removing the folder loses them; and the feature
@@ -186,6 +189,7 @@ the list and get a confirmation first.
 
 ## Resume
 
-1. Carry out Update.
-2. In the ledger set `Gate Status` to `IN_PROGRESS`. `Design Gate` stays
-   `PENDING`.
+1. Run `ai_team set <slug> --gate-status IN_PROGRESS --history "Resumed"`.
+   `Design Gate` stays `PENDING`, and a new round starts.
+2. Carry out Update, then `ai_team next <slug> --dispatch`, and go on with what
+   it returns.

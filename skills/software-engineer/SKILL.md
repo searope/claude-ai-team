@@ -11,14 +11,9 @@ agent: ai-team-builder
 background: false
 model: claude-opus-5-5
 effort: medium
-allowed-tools:
-  - Read
-  - Glob
-  - Grep
-  - Edit
-  - Write
+# Access is set by the agent type (its tools and its guard hook), not here.
 metadata:
-  version: "8.2"
+  version: "8.4"
   role: "Surgical Software Engineer"
 ---
 
@@ -71,7 +66,8 @@ dispatch get the same discipline: change only what they require.
 
 ### Phase 3: Autonomous Verification
 Run local compilers, type-checkers, and baseline unit tests. Auto-fix any
-build failures up to 3 times. If the build still fails for a reason in your
+build failures up to 3 times, and say in your handoff what each auto-fix
+changed. If the build still fails for a reason in your
 own area, escalate, blocked on `user`.
 
 ### Phase 4: Completion

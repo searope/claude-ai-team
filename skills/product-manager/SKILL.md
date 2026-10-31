@@ -12,10 +12,13 @@ allowed-tools:
   - Read
   - Glob
   - Grep
+  - AskUserQuestion
   - "Edit(docs/specs/**)"
+  - "Write(docs/specs/**)"
   - "Edit(.ai-team/scratchpad/**)"
+  - "Write(.ai-team/scratchpad/**)"
 metadata:
-  version: "8.3"
+  version: "8.4"
   role: "Principal Product Manager"
 ---
 

@@ -9,10 +9,9 @@ override replaces, and do what the override says instead.
 
 ## Start
 
-First look at the ledgers in this folder. If one of them is `IN_PROGRESS`,
-`AWAITING_USER` or `BLOCKED`, another feature is in development here, whether
-or not it has changed a file yet: tell the user to finish, roll back or shelve
-that feature first, and stop.
+First run `ai_team status`. If it lists an `active` feature, another feature is
+in development here, whether or not it has changed a file yet: tell the user to
+finish, roll back or shelve that feature first, and stop.
 
 Then run `git status --porcelain --untracked-files=all`, which lists every new
 file and not only its folder. Leave `.claude/worktrees/` out of this check and
@@ -33,14 +32,20 @@ is not clean, list the uncommitted paths and do this:
 - **On no:** stop. The feature does not start on a dirty tree.
 
 The feature's `Start Point` is `git rev-parse HEAD` once the tree is clean.
-Record the workflow in the ledger as `in-place`.
+Give it to `ai_team new` with `--workflow in-place`.
 
 ---
 
 ## Deliver
 
-Set `READY_FOR_MERGE`, tell the user which files to review and commit, and
-remind them that the next feature can start only after that commit.
+1. Run `ai_team verify-delivery <slug>`. If `unchanged` is false, something
+   changed after the review (`changed_paths`): run
+   `ai_team review-again <slug> --dispatch`, a backward route to Security that
+   counts toward no cap. The second time in a row it sets `BLOCKED` and names
+   the paths that keep changing.
+2. Run `ai_team delivered <slug>`: the feature is `READY_FOR_MERGE`. Tell the
+   user which files to review and commit (the change record lists them), and
+   remind them that the next feature can start only after that commit.
 
 ---
 
@@ -48,14 +53,13 @@ remind them that the next feature can start only after that commit.
 
 Present the two options, a rollback or shelving, together with the rollback
 list, and wait for the answer (use `AskUserQuestion` when it is available).
-Build the list from git, not from handoffs, so that the partial work of an
-interrupted stage is included:
-- `git status --porcelain --untracked-files=all`: every modified, deleted or
-  untracked path.
-- `git log <Start Point>..HEAD`: commits made since the feature started. You
-  cannot undo those; name them and leave them to the user.
-- The feature's working files under `.ai-team/`: its handoffs, its mock-up, its change
-  record, your notes and its ledger. Git ignores them, so name them yourself.
+Build the list with `ai_team stop-list <slug>`, which takes it from git, not
+from handoffs, so that the partial work of an interrupted stage is included:
+- `uncommitted`: every modified, deleted or untracked path.
+- `commits`: commits made since the feature started (`<Start Point>..HEAD`).
+  You cannot undo those; name them and leave them to the user.
+- `working_files`: the feature's files under `.ai-team/`, which git ignores:
+  its ledger, handoffs, mock-up, change record, notes and snapshots.
 - Warn that a rollback deletes uncommitted work for good, and that the list
   may hold edits the user made by hand since the feature started. Those go too
   unless the user saves them first.
@@ -68,22 +72,22 @@ confirmation first.
 1. Restore every modified or deleted tracked path on the list with
    `git restore --staged --worktree -- <paths>`.
 2. Delete every untracked path on the list.
-3. Delete the feature's handoffs, its change record and your notes, then its
-   ledger.
+3. Run `ai_team purge <slug> --confirm`: it deletes the feature's working
+   files under `.ai-team/`, its ledger last.
 4. Run `git status --porcelain` and confirm that nothing of the feature is
    left. Report what you removed and what you left for the user.
 
 For a feature that is already shelved, its work is in the stash: show
 `git stash show --include-untracked --name-only <stash>`, and on confirmation
-drop that stash and delete the feature's files under `.ai-team/`.
+drop that stash and run `ai_team purge <slug> --confirm`.
 
 **Shelve:**
 1. Run `git stash push --include-untracked -m "ai-team/<feature-slug>"`. It
    stores the work and returns the working tree to the last commit. The files
    under `.ai-team/` are ignored by git and stay where they are.
-2. In the ledger set `Gate Status` to `REJECTED`, `Design Gate` to `PENDING`
-   and `Shelved Stash` to `ai-team/<feature-slug>`. Add a `History` line with
-   the stage the feature stopped at and the reason.
+2. Run `ai_team set <slug> --gate-status REJECTED --design-gate-pending
+   --shelved-stash "ai-team/<feature-slug>" --history "Shelved at <stage>:
+   <reason>"`.
 3. Tell the user the work is kept in that stash, and that `git stash drop` or
    `git stash clear` would destroy it.
 
@@ -100,6 +104,7 @@ drop that stash and delete the feature's files under `.ai-team/`.
    `git status --porcelain --untracked-files=all` lists now and did not list
    in `Start`. Delete nothing under `.claude/worktrees/`. Leave the feature
    shelved, tell the user which commit and file conflict, and stop.
-3. In the ledger set `Shelved Stash` to `none`, `Start Point` to the current
-   `git rev-parse HEAD` and `Gate Status` to `IN_PROGRESS`. `Design Gate`
-   stays `PENDING`.
+3. Run `ai_team set <slug> --shelved-stash none --start-point <the hash git
+   rev-parse HEAD prints> --gate-status IN_PROGRESS --history "Resumed"`.
+   `Design Gate` stays `PENDING`, and a new round starts. Go on with the action
+   it returns, as section 3 of the skill says.

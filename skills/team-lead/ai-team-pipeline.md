@@ -1,6 +1,6 @@
 # AI Team Pipeline: Rules for Every Agent
 
-**Pipeline Version:** 7.7
+**Pipeline Version:** 8.0
 
 Feature work runs through a pipeline of stages. Each stage is the work of one
 skill, carried out by an agent that the orchestrator dispatches. The
@@ -11,7 +11,8 @@ what it may write, what each artifact must contain, and how it is dispatched
 and reports. They name no skill. Which skill carries out which stage, the
 order of the stages, the lane a request takes, the design gate, routing and
 the git workflow are the orchestrator's part. They are written in its own
-skill, the `SKILL.md` next to this file, and no other agent reads that.
+skill, the `SKILL.md` next to this file, and kept by its tool, `ai_team.py`;
+no other agent reads either.
 
 An agent is started by a dispatch (§5). It reads these rules and the project
 file that the dispatch names, does the work its skill describes, writes its
@@ -32,7 +33,10 @@ from the project `CLAUDE.md`. Every dispatch names it. An agent uses four
 things in it:
 
 - **Project Paths:** which paths are `Source`, `Tests` and `Infra` in this
-  project (§2).
+  project (§2). Each path stands in backticks and is matched like a line of
+  `.gitignore`: `src/` is a folder named `src` at any depth, `/src/` only the
+  one at the root, `*.test.*` a file name anywhere. Words outside the
+  backticks are a comment for people.
 - **Worktree setup:** what a worktree has besides the files git tracks, and
   how tools are run in it. A worktree is a fresh checkout: it has no
   environment, no settings file and no local data unless this line gives it
@@ -50,6 +54,10 @@ things in it:
   that has no such line, or whose line says `none`, gives no way to render a
   page: the mock-up is then made without screenshots.
 - **Overrides for this project:** the project's own rules (§6).
+
+The orchestrator also reads its `Scans` section, the commands it runs itself
+before a review (§4, Scan report), and its `Second Review` line, which turns on
+a second review on another model. No agent needs either.
 
 ---
 
@@ -96,6 +104,19 @@ What a feature does is `Spec`. Its wording is `Copy`. Its look and layout are
   reads it.
 - An agent that finds a problem in another area does not fix it. It reports
   it (§5).
+- A guard holds these limits while a stage runs, and it is strict by default.
+  The file tools write only the files of the stage's area and its handoff. A
+  shell command writes only into the agent's scratch folder or those same
+  files, by whatever means; `git` and `gh` run only in their read-only forms,
+  plainly spelled, with no alias, variable or `-c` option; no file that holds
+  secrets is read, printed, copied, sourced or searched; `eval`, a shell fed
+  from a pipe, and in-place editors do not run. A call the guard blocks is not
+  retried in another form: the agent reports what its work needed, and
+  escalates where the work cannot be done without it (§5).
+- When a stage returns, the orchestrator compares every file the stage could
+  have changed with how it was before the stage ran, the working files under
+  `.ai-team/` and `.claude/` included, which git ignores. A change outside the
+  stage's area stops the feature for the user, who can have it put back.
 - Only the orchestrator dispatches agents. An agent invokes no skill.
 - Only the orchestrator runs git commands that change the repository. No
   agent commits, pushes, merges, stashes or resets. A merge conflict in a file
@@ -249,6 +270,12 @@ Loading, Ideal, Overflow, Degraded and Error.
   An entry can limit the change to a part of its file. This list is where the
   ADR says what the feature leaves unchanged.
 - `Allowed Blast Radius (Infra)`: the same for `Infra`.
+- Each of the two is a heading or a bold label with that exact name, followed
+  by a list: one item per file, starting with the file's path in backticks,
+  relative to the project root, then any limit, as in
+  ``- `src/Settings/SaveButton.cs` — only `OnSave` ``. A list with nothing to
+  change holds the one item `none`. The guard reads these lists to know what
+  the build stages may write: a path written any other way is not on them.
 - `Infra Impact: yes` or `Infra Impact: no` on one line, followed by what
   changes. It is `yes` when the feature needs any change in `Infra`, such as
   CI, containers, environment variables or database migrations.
@@ -290,6 +317,17 @@ Loading, Ideal, Overflow, Degraded and Error.
   feature's changes are counted from. The orchestrator writes it before a
   stage that reads it. Every path in it is part of the feature. A new file
   that is not committed yet appears only in the status list, not in the diff.
+
+**Scan report**
+- Written by the orchestrator's tool, which ran each scan of the project file
+  from the feature's folder before the review: for each scan its command, its
+  result (`passed`, `FAILED` or `COULD NOT RUN`, with why) and its output.
+- A failed scan is a blocker of the review, on the area of the files its
+  finding names, unless the review shows that the finding is a false positive
+  or lies in nothing the feature changes: that goes under `## Observations`,
+  with the reason, finding by finding. A scan that could not run proves
+  nothing, and neither does a passed scan beyond its own check: the review
+  still reads the change.
 
 ---
 
@@ -358,7 +396,9 @@ by a part headed `## For Later Stages`. It returns the same text as its final
 message. An agent that has no file-writing tools only returns it, and the
 orchestrator writes the file. A handoff is addressed to the orchestrator: no
 agent reads another agent's handoff unless its dispatch cites it. It is
-short, and it does not repeat what the stage's artifact holds.
+short, and it does not repeat what the stage's artifact holds. A handoff
+counts only for the run that wrote it: one that is older than the stage's
+dispatch, or of another round, is stale.
 
 ```markdown
 # Handoff: <the stage, as on the `Stage` line> / <feature-slug>
@@ -377,7 +417,9 @@ short, and it does not repeat what the stage's artifact holds.
 | `PASS` / `BLOCK` | The verdict of a review. On `BLOCK`, each blocker names its own area. |
 
 - A review reports `PASS` or `BLOCK` and nothing else. Every other stage
-  reports `DONE`, `ESCALATE` or `DEFECTS`.
+  reports `DONE`, `ESCALATE` or `DEFECTS`. Security is the review; a project
+  can add a second, independent one on another model, which follows the same
+  rules and reads neither the first review's report nor its handoff.
 - `DONE` requires every gate that the project file sets for the stage to
   pass (§6). The agent runs those gates itself.
   - A gate the agent cannot run, because it has no shell or the command is

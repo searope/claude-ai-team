@@ -11,14 +11,9 @@ agent: ai-team-author
 background: false
 model: claude-opus-5-5
 effort: medium
-allowed-tools:
-  - Read
-  - Glob
-  - Grep
-  - "Edit(docs/adr/**)"
-  - "Edit(.ai-team/scratchpad/**)"
+# Access is set by the agent type (its tools and its guard hook), not here.
 metadata:
-  version: "6.2"
+  version: "6.3"
   role: "Principal Systems Architect"
 ---
 

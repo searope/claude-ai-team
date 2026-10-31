@@ -6,21 +6,20 @@ project file, and commits what it set up.
 
 ---
 
-## 1. Ask the user
+## 1. The git workflow
 
-Ask how features in this project should be developed (use `AskUserQuestion`
-when it is available). If the user cannot be asked, write `ask`. There are
-three choices:
-- **Worktree** and **In place**, the two git workflows. Give each together
-  with what it leads to: the rows of the table under `Start a new feature` in
-  the skill, in plain sentences. For the worktree, add that it has only the
-  files git tracks.
-- **Ask each time:** `team-lead` asks this question whenever a feature starts
-  from this folder.
+Every feature is developed in a worktree of its own: the `Workflow` line of
+the project file is `worktree only`, and you do not ask. A worktree is a
+separate folder with a branch of its own, `agent/<feature-slug>`; it starts
+as a fresh checkout with only the files git tracks, `team-lead` commits the
+feature's work there and merges the base branch in before each run of Testing,
+and the user merges or pushes the branch when the feature is `READY_FOR_MERGE`.
+The guard and the snapshot catch most of what a stage should not do; the
+worktree is what makes the rest cheap to throw away.
 
-Tell the user that the answer goes on the `Workflow` line of the project file
-and can be changed there, and that a word in the command, `worktree` or
-`in-place`, overrides it for one feature.
+Tell the user this, and that the line is theirs to change in the project file
+(`worktree`, `in-place`, `ask`, `in-place only`); with `worktree only`, a
+command that asks for `in-place` is refused.
 
 ---
 
@@ -109,19 +108,61 @@ cost, so that the user can choose another.
 
 ---
 
-## 3. Write the project file
+## 3. Propose a fast path and the gates
+
+Two project rules make features cheaper and their checks firmer. Propose both,
+each with what it leads to, and ask whether to take it as proposed, changed, or
+not at all (use `AskUserQuestion` when it is available). Step 4 writes what
+the user accepts under `Overrides for this project`.
+
+**A fast path.** Without one, every request that the user does not call
+trivial runs all the stages, each of them a model run of its own. Propose:
+
+> - **Fast Path:** a change to existing behaviour that touches at most three
+>   files in `Source`, none in `Infra`, adds no dependency, changes no screen
+>   and no user-facing text, and leaves no decision to the user. It skips
+>   Discovery, Copy, UI/UX and Architecture, and with them the spec, the ADR
+>   and the design gate. Coding, Testing and Security run.
+
+**Gates and scans.** Gates are commands that a stage runs and that must pass
+before it reports `DONE` (rules, section 6); the stage runs them and reports
+them. Scans are read-only checks that `ai_team` runs itself before every
+review, and whose report the reviewers must answer: they rest on the tool, not
+on an agent's word. Run `ai_team propose-gates`: it detects the stack (Python
+first, with uv, Poetry or Pipenv when their lock file is there; .NET; Node;
+Rust; Go) and proposes both, such as `pytest`, `ruff`, `mypy`, `pip-audit`,
+`bandit`, `dotnet test`, `dotnet list package --vulnerable`, `npm audit` and
+gitleaks for secrets. Show the user each proposed check with what it does and
+the link of its tool; its `notes` say which tools are not installed: a gate
+whose tool is missing stops its stage, and a scan whose tool is missing is
+reported as `COULD NOT RUN`.
+
+**A second review.** Ask whether stage 9 should run: a second read-only review
+of the same change on another model, which blind spots of the first may not
+share. It costs one more review per round; the default is `no`.
+
+---
+
+## 4. Write the project file
 
 - Work out the project's paths. Look at what the repository holds (`Glob`) and
   decide which of its paths are `Source`, `Tests` and `Infra`, as
   `Write Isolation` in the rules uses those names. Token, theme, style and
   locale files are `Source`; CI configuration, container files,
-  infrastructure code and migrations are `Infra`. For an area you cannot
-  place, keep the template's line.
+  infrastructure code and migrations are `Infra`. Write each path in
+  backticks: the guard and `ai_team` read only those, matched like lines of
+  `.gitignore`. For an area you cannot place, keep the template's line.
 - `Read` the template and `Write` it to `.claude/ai-team-project.md`, with the
-  project's name in the title, those paths in `Project Paths`, the user's
-  answer on the `Workflow` line and the result of step 2 on the
-  `Worktree setup` line. Write `none` on the `Mock-up` line: its commands are
-  the user's to give. Change nothing else in the template.
+  project's name in the title, those paths in `Project Paths`,
+  `worktree only` on the `Workflow` line and the result of step 2 on the
+  `Worktree setup` line. Under `Scans`, write the scans the user accepted, as
+  `propose-gates` gives them, in place of `- None.`; on the `Second Review`
+  line, the user's answer. Under `Overrides for this project`, write the fast
+  path and the gates the user accepted in step 3, in place of `- None.`, as
+  `- **Fast Path:** <the rule>` and `- **Gates:**` with one line per stage
+  (`  - 7. Testing: <the commands, and what passing means>`). Write `none` on
+  the `Mock-up` line: its commands are the user's to give. Change nothing else
+  in the template.
 - Add the import. If `CLAUDE.md` exists in the project root, append the line
   `@.claude/ai-team-project.md` unless it is already there. If only
   `.claude/CLAUDE.md` exists, append `@ai-team-project.md` there. If neither
@@ -134,7 +175,7 @@ cost, so that the user can choose another.
 
 ---
 
-## 4. Commit what you set up
+## 5. Commit what you set up
 
 - **You created the repository:** `git add -A` and commit with the message
   `Baseline before AI team pipeline`. Look at what would be added first. If it
@@ -150,12 +191,16 @@ cost, so that the user can choose another.
 
 ---
 
-## 5. Tell the user
+## 6. Tell the user
 
 - What you created and what you committed.
 - The three lines of `Project Paths` as you wrote them. They decide what each
-  build stage may write, so ask the user to check them. They can be corrected
-  in the project file at any time.
+  build stage may write, and the guard holds the stages to them, so ask the
+  user to check them. They can be corrected in the project file at any time.
+- The fast path, the gates, the scans and the second review you wrote, or
+  that there are none, and that all of them are the user's to change in the
+  project file. The scans run once the user approves their list at the first
+  review.
 - The `Mock-up` line says `none`. With that, a feature that changes a screen
   gets a mock-up page that the user opens in a browser, with no screenshots
   and no check of how it renders. For a screenshot of the real page beside

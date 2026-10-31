@@ -9,16 +9,11 @@ user-invocable: false
 context: fork
 agent: ai-team-builder
 background: false
-model: claude-opus-5-5
+model: claude-sonnet-5-5
 effort: medium
-allowed-tools:
-  - Read
-  - Glob
-  - Grep
-  - Edit
-  - Write
+# Access is set by the agent type (its tools and its guard hook), not here.
 metadata:
-  version: "6.0"
+  version: "6.2"
   role: "Principal DevOps Engineer"
 ---
 

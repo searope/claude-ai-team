@@ -11,14 +11,9 @@ agent: ai-team-builder
 background: false
 model: claude-opus-5-5
 effort: medium
-allowed-tools:
-  - Read
-  - Glob
-  - Grep
-  - Edit
-  - Write
+# Access is set by the agent type (its tools and its guard hook), not here.
 metadata:
-  version: "8.3"
+  version: "8.4"
   role: "Adversarial Test Engineer"
 ---
 

@@ -59,7 +59,10 @@ branch and no ledger.
    needs gets it.
 6. **Say it.** Tell the user the lane and the condition that decided it:
    when the first stage starts, or in your next report if you did not. For a
-   feature, write the same into `History` when you create the ledger.
+   feature, give the same to `ai_team new` as `--lane-reason`, which writes it
+   into `History`. On a fast path, `ai_team new` also takes `--lane fast`, the
+   files of step 2 as `--files`, and the stages the project's rule skips
+   besides the design stages as `--skip-stages`.
 
 A feature, on the fast path or in full, goes on with the next step of
 `Start a new feature`.
@@ -71,9 +74,8 @@ A feature, on the fast path or in full, goes on with the next step of
 The trivial lane ends your part as the orchestrator. Create no ledger and no
 dispatch, and no slug unless the project's rule for the lane needs one.
 
-- **A feature in development here.** If a ledger in this folder is
-  `IN_PROGRESS`, `AWAITING_USER` or `BLOCKED`, the change would land among
-  that feature's changes. Do not make it: tell the user that it has to wait
+- **A feature in development here.** If `ai_team status` lists an `active`
+  feature in this folder, the change would land among that feature's changes. Do not make it: tell the user that it has to wait
   for that feature, or be made in another folder.
 - **Make it.** Tell the user that the change takes the trivial lane, why,
   and what the project's rule asks of it. Then make the change in the same
@@ -96,34 +98,27 @@ on as `Choose`, step 5, says.
 
 **A fast path that meets its edge.** A stage on a fast path can be blocked on
 the area of a stage that the fast path skips. There is no stage to route
-that to. Instead:
+that to: `ai_team` sets `BLOCKED`, notes the edge in `History`, and its action
+is `ask_user` with the kind `fast_path_edge`. Then:
 - **One more file.** The stage needs a file that `Files` does not name. Hold
   the request against the conditions again, with that file added. If they
-  all hold, add the file to the ledger's `Fast Path` section, note it in
-  `History`, and remove the item from `Active Defects`. Then run the blocked
-  stage again, the way `Route` does after an answer of the user: `Round`
-  goes up, no other stage is reset, and nothing counts toward a cap.
+  all hold, run `ai_team fast-path <slug> add-file --path <file> --dispatch`
+  without asking: it adds the file, closes the item, and runs the blocked
+  stage again (`Round` goes up, no other stage is reset, nothing counts
+  toward a cap).
 - **Anything else,** such as a file that breaks a condition, or a request
-  that leaves open what a design stage would have settled: set `BLOCKED`,
-  note in `History` that the feature is at the edge of its fast path, and
-  ask the user, with what each way leads to. The answer can also come in a
-  later run, after `continue`.
-  - *All the stages:* the feature moves to the full lane, as below.
+  that leaves open what a design stage would have settled: ask the user,
+  with what each way leads to. The answer can also come in a later run.
+  - *All the stages:* `ai_team fast-path <slug> to-full --dispatch`. Every
+    stage the fast path skipped is `PENDING` again, the design gate is
+    `PENDING`, your notes say that the feature began on the fast path and
+    which files its stages changed, and the feature goes back to the first
+    stage, counting toward no cap. An item that was blocked on a skipped
+    stage stays open for that stage, which finds it in its dispatch. What was
+    built stays in the folder, and the stages that built it run again, now on
+    the spec and the ADR.
   - *Stay on the fast path:* the user answers what was open, narrows the
     change, or changes the rule in the project file. Check the conditions
-    once more. If they hold, bring the ledger's `Fast Path` section in line
-    with the answer, and run the blocked stage again with the answer as its
-    direction, as above.
-  - *Stop the feature.*
-
-**Moving a feature to the full lane.**
-1. In the ledger, set every stage that the fast path skipped to `PENDING`,
-   set `Design Gate` to `PENDING`, and take out the `Fast Path` section.
-2. Write into your notes for the stages that the feature began on the fast
-   path, with its request and the files that its stages have changed so far.
-3. This is a backward route to the first stage, and it counts toward no cap.
-   An item that was blocked on a skipped stage stays open for that stage,
-   which finds it in its dispatch.
-4. From here the feature is like any other. What was built stays in the
-   folder, and the stages that built it run again, now on the spec and the
-   ADR.
+    once more. If they hold, run `ai_team fast-path <slug> stay --direction
+    "<the answer>" [--files <the files, when they changed>] --dispatch`.
+  - *Stop the feature:* `Stop` of the feature's git workflow.

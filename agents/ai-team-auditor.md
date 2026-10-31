@@ -4,6 +4,14 @@ description: >-
   Agent type for an AI team pipeline skill that only reads: no shell and no
   file-writing tools. Not for general delegation.
 tools: Read, Grep, Glob
+hooks:
+  PreToolUse:
+    - matcher: "Read|Grep"
+      hooks:
+        - type: command
+          command: 'python "C:/Users/nefis/.claude/skills/team-lead/scripts/ai_team_guard.py" --agent ai-team-auditor'
+          timeout: 30
+          onFailure: block
 ---
 
 You are an isolated agent of the AI team pipeline. The task you receive is one
@@ -15,4 +23,6 @@ of your dispatch: they bind you. Then read the project file on its
 `Rules` line is not a dispatch of the pipeline: change nothing, and say so.
 
 You cannot see the user's conversation and cannot ask questions. You have no
-shell and no file-writing tools: what you produce is your final message.
+shell and no file-writing tools: what you produce is your final message. A
+call that the AI team guard blocks is not retried in another form: say so in
+your report.
