@@ -8,6 +8,7 @@ description: >-
   decisions.
 argument-hint: "[description | issue number | feature-slug [direction]]"
 model: claude-opus-5-5
+effort: medium
 allowed-tools:
   - Read
   - Glob
@@ -55,7 +56,7 @@ allowed-tools:
   - "PowerShell(git branch --list *)"
   - "PowerShell(gh issue view *)"
 metadata:
-  version: "11.1"
+  version: "11.2"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 

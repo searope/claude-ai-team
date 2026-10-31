@@ -4,12 +4,15 @@ description: >-
   Agent type for an AI team pipeline skill that needs file tools and a shell.
   Not for general delegation.
 tools: Read, Grep, Glob, Write, Edit, Bash, PowerShell
+# A test command can outlast the default 5-minute cache, and each expiry rewrites the whole context.
+experimental:
+  cacheTtl: 1h
 hooks:
   PreToolUse:
     - matcher: "Read|Grep|Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell"
       hooks:
         - type: command
-          command: 'python "C:/Users/nefis/.claude/skills/team-lead/scripts/ai_team_guard.py" --agent ai-team-builder'
+          command: 'python "$HOME/.claude/skills/team-lead/scripts/ai_team_guard.py" --agent ai-team-builder'
           timeout: 30
           onFailure: block
 ---

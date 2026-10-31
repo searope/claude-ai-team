@@ -9,7 +9,7 @@ hooks:
     - matcher: "Read|Grep"
       hooks:
         - type: command
-          command: 'python "C:/Users/nefis/.claude/skills/team-lead/scripts/ai_team_guard.py" --agent ai-team-auditor'
+          command: 'python "$HOME/.claude/skills/team-lead/scripts/ai_team_guard.py" --agent ai-team-auditor'
           timeout: 30
           onFailure: block
 ---
