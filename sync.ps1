@@ -6,7 +6,8 @@ Copies the AI team between this repository and Claude Code's own folders.
   ./sync.ps1 install   this repository -> Claude Code's folders
 
 Only the skills and agent types named in team.json are touched. Nothing else
-in ~/.claude (other skills, credentials, transcripts) is read or copied.
+in ~/.claude (other skills, credentials, transcripts) is read or copied, and
+the __pycache__ folders that Python writes inside a skill are left out.
 #>
 param(
     [Parameter(Mandatory)][ValidateSet('check', 'save', 'install')][string]$Mode,
@@ -39,6 +40,7 @@ function Get-MissingEntries([string]$Root) {
 }
 
 # The team's files under a root, as relative paths like "skills/team-lead/SKILL.md".
+# Python's __pycache__ folders are not team files, so check, save and install all skip them.
 function Get-TeamFiles([string]$Root) {
     if (-not (Test-Path $Root)) { return @() }
     $full = (Resolve-Path $Root).Path.TrimEnd('\', '/')
@@ -47,7 +49,8 @@ function Get-TeamFiles([string]$Root) {
         $dir = Join-Path $full "skills/$skill"
         if (Test-Path $dir) {
             $files += Get-ChildItem $dir -Recurse -File -Force |
-                ForEach-Object { $_.FullName.Substring($full.Length + 1).Replace('\', '/') }
+                ForEach-Object { $_.FullName.Substring($full.Length + 1).Replace('\', '/') } |
+                Where-Object { $_ -notmatch '/__pycache__/' }
         }
     }
     foreach ($agent in $Agents) {
