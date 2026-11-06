@@ -21,7 +21,7 @@ sys.path.insert(0, HERE)
 
 from aiteam import checks  # noqa: E402
 from aiteam import cost as costmod  # noqa: E402
-from aiteam import engine, gitio, guard, ledger, model  # noqa: E402
+from aiteam import engine, gitio, guard, model  # noqa: E402
 from aiteam import project as projmod  # noqa: E402
 
 SKILL_DIR = os.path.dirname(HERE)
@@ -100,6 +100,10 @@ def cmd_doctor(args):
     facts["rules"] = {"path": rules, "version": m.group(1) if m else None}
     if not m or m.group(1) != model.PIPELINE_VERSION:
         warnings.append(f"the rules file is not at Pipeline Version {model.PIPELINE_VERSION}")
+    skill_text = projmod.read_text(os.path.join(SKILL_DIR, "SKILL.md")) or ""
+    m = re.search(r"`Pipeline Version` ([\d.]+)", skill_text)
+    if not m or m.group(1) != model.PIPELINE_VERSION:
+        warnings.append(f"team-lead's SKILL.md is not written for Pipeline Version {model.PIPELINE_VERSION}")
     if proj.exists:
         code, out, _ = gitio._git(root, "check-ignore", "-q", ".ai-team/probe", check=False)
         if code != 0:
@@ -109,7 +113,7 @@ def cmd_doctor(args):
     for st in model.STAGES:
         if not st.skill:
             continue
-        if st.number == 9 and not proj.second_review:
+        if st.runs_when.startswith("project:") and not proj.second_review:
             continue  # optional stage, off in this project
         fm = _frontmatter(os.path.join(skills_root, st.skill, "SKILL.md"))
         if not fm.get("_text"):
@@ -124,11 +128,8 @@ def cmd_doctor(args):
         text = projmod.read_text(os.path.join(claude_dir, "agents", f"{agent}.md"))
         if text is None:
             warnings.append(f"agent {agent} not found in {os.path.join(claude_dir, 'agents')}")
-        elif "ai_team_guard.py" not in text:
-            warnings.append(f"agent {agent} has no PreToolUse hook running ai_team_guard.py")
-    status = engine.status_all(root)
-    if status["legacy_ledgers"]:
-        warnings.append("ledgers from pipeline 7.x need `import-md`: " + ", ".join(status["legacy_ledgers"]))
+        elif not re.search(rf'ai_team_guard\.py"? --agent {re.escape(agent)}\b', text):
+            warnings.append(f"agent {agent} has no PreToolUse hook running ai_team_guard.py --agent {agent}")
     emit({"ok": not warnings, "warnings": warnings, "facts": facts})
 
 
@@ -237,7 +238,8 @@ def main(argv=None):
     with_slug("change-record", "write the change record")
     with_slug("verify-delivery", "has anything changed since the review?")
     dispatch_opts(with_slug("review-again", "paths changed after the review: run Security again"))
-    sp = with_slug("delivered", "Deliver is done: READY_FOR_MERGE")
+    sp = with_slug("delivered", "Deliver is done: READY_FOR_MERGE (refused when the change is not what the "
+                                "review saw)")
     sp.add_argument("--commit")
     with_slug("verify-delivered", "before a step the user orders: unchanged since delivery?")
 
@@ -262,7 +264,6 @@ def main(argv=None):
     sp.add_argument("--workflow", required=True, choices=["in-place", "worktree"])
     sp.add_argument("--start-point", required=True)
     sp.add_argument("--base")
-    with_slug("import-md", "convert a 7.x markdown ledger to JSON")
 
     sp = sub.add_parser("cost", help="tokens per stage from Claude Code's transcripts")
     sp.add_argument("--projects-dir", default=os.path.join(os.path.expanduser("~"), ".claude", "projects"))
@@ -305,18 +306,6 @@ def run(args):
     if c == "recover":
         ctx = engine.recover(find_root(args.root), args.slug, args.workflow, args.start_point, args.base, SKILL_DIR)
         return emit(engine.next_action(ctx))
-    if c == "import-md":
-        root = find_root(args.root)
-        md = os.path.join(root, *model.ledger_md_path(args.slug).split("/"))
-        text = projmod.read_text(md)
-        if text is None:
-            raise engine.PipelineError(f"no markdown ledger at {model.ledger_md_path(args.slug)}")
-        if ledger.exists(root, args.slug):
-            raise engine.PipelineError("this feature has a JSON ledger already")
-        shutil.copyfile(md, md[:-3] + ".v7.md")
-        led = ledger.import_markdown(text, args.slug)
-        ledger.save(root, led)
-        return emit(engine.next_action(engine.Ctx(root, args.slug, led, SKILL_DIR)))
 
     ctx = ctx_for(args)
     if c == "next":

@@ -26,9 +26,10 @@ feature needs them, and the second review when the project turns it on.
   may write. The guard then lets the file tools write only those files, the stage's handoff and the agent's
   scratch folder. A shell command may write nowhere else, `git` and `gh` run only in their read-only forms, and
   no agent opens a file that holds secrets. Write Isolation in the rules lists what it blocks. The guard is not
-  a sandbox, so the tool checks afterwards as well: before each isolated stage that writes, it takes a snapshot
-  of every file the stage could change, those under `.ai-team/` and `.claude/` included. When the stage
-  returns, a change outside its area stops the feature, and you choose whether it is put back. Discovery runs
+  a sandbox: it reads commands as text and can miss a form. So the tool checks afterwards as well: before each
+  isolated stage that writes, it takes a snapshot of every file the stage could change, those under
+  `.ai-team/` and `.claude/` included. When the stage returns, a change outside its area, or a commit, stops
+  the feature, and you choose whether a changed file is put back. Discovery runs
   in your conversation, under your session's own permissions, and neither the guard nor a snapshot watches it.
 - The **pipeline rules** bind every agent and name no skill: the write areas, the fields each artifact must
   carry, how tools are run, and how an agent is dispatched and reports. There is one copy of the rules, next to
@@ -52,7 +53,7 @@ feature needs them, and the second review when the project turns it on.
   git workflow settings, how a page is rendered for a mock-up, its scans, whether the second review runs, its
   overrides of the rules, and a few lines that say when the pipeline applies.
 - **Scans** are read-only checks, such as a dependency audit or a search for secrets, that the project file lists
-  under `Scans`. Before each review the tool runs them itself, from the feature's folder, and gives the reviewers
+  under `Scans`. Once per round, before its first review, the tool runs them itself, from the feature's folder, and gives the reviewers
   their report, so these checks rest on tools and not on an agent's word. A failed scan blocks the review,
   unless the review shows that the finding is a false positive or lies outside the change. The tool runs a list
   of scans only after you have approved it, and asks again when the list changes. Gates are the other kind of
@@ -113,8 +114,8 @@ feature needs them, and the second review when the project turns it on.
   Every skill except `team-lead` and `product-manager` runs as one of them.
   - `ai-team-author`: file tools and no shell. Used by `copywriter` and `system-architect`.
   - `ai-team-builder`: file tools and a shell. Used by `ui-designer`, `software-engineer`, `devops-engineer` and
-    `test-engineer`. The designer's shell is for the project's build and screenshot commands only. It keeps its
-    prompt cache for an hour, because a test command can outlast the default five minutes.
+    `test-engineer`. The designer uses its shell for the project's build and screenshot commands. It keeps
+    its prompt cache for an hour, because a test command can outlast the default five minutes.
   - `ai-team-auditor`: read only, no shell and no file writing. Used by `security-reviewer` and
     `second-reviewer`.
 - `team.json`: the team roster. It names every skill and agent type that belongs to the team.
@@ -143,12 +144,15 @@ In a Claude Code session opened here, two things guard the file tools. The deny 
 `.claude/settings.json` refuse every write under `~/.claude/skills` and `~/.claude/agents`: a live file changes
 only through `sync.ps1 install`. And `.claude/hooks/team-scope.ps1` refuses a write under this repository's
 `skills/` and `agents/` unless the file belongs to a skill or agent type in `team.json`. So a skill cannot be
-created or changed by accident. Neither sees shell commands, and neither applies in sessions opened in other
-projects.
+created or changed by accident. The hook runs in PowerShell 7 and fails closed (`onFailure: block`): where it
+cannot run, every write of the file tools in this repository is refused. Neither sees shell commands, and
+neither applies in sessions opened in other projects.
 
 ## Install on a machine
 
-Besides Claude Code and git, a machine needs `pwsh` for `sync.ps1`, and Python 3.9 or later that starts as
+Besides Claude Code 2.1.295 or later (its `onFailure: block` is what makes a guard hook that cannot start
+block the call) and git, a machine needs `pwsh` (PowerShell 7) for `sync.ps1` and for this repository's scope
+hook, and Python 3.9 or later that starts as
 `python` from the PATH. `team-lead` runs its tool as `python "${CLAUDE_SKILL_DIR}/scripts/ai_team.py"`, and each
 agent type runs the guard as `python "$HOME/.claude/skills/team-lead/scripts/ai_team_guard.py"`. The hook finds
 its script under `$HOME/.claude`, so the team has to be installed there, which is where `sync.ps1` puts it. When
@@ -210,8 +214,9 @@ the project file send such a change past the pipeline. A project sets its own la
 project.
 
 - **Fast Path:** which stages a small change skips, and the conditions it must meet. For example: a change of
-  text or style skips stages 1 to 4 and 6, when it touches at most three files and none of them is a schema or
-  a deploy file.
+  text or style skips stages 1 to 4, when it touches at most three files and none of them is a schema or
+  a deploy file. A fast path always skips Infra (stage 6), which builds only from an ADR, and never takes a
+  file in `Infra`.
 - **Trivial Lane:** which changes are made directly, and what is still asked of such a change. For example: a
   change of at most ten lines in one stylesheet, after which the tests are run once.
 
@@ -243,7 +248,8 @@ made and tested here first, and installed last:
    in the test. `claude -p` skips the frontmatter hooks of an agent file in a project folder that is not
    trusted, so the guard does not run in such a test. A test of the guard needs the agent types passed with
    `--agents <file.json>` instead: one entry for each, with its `description`, `prompt`, `tools` and `hooks`,
-   and each hook command pointed at the scratch project's copy of `ai_team_guard.py`.
+   and each hook command pointed at the scratch project's copy of `ai_team_guard.py`. The guard denies every
+   call of an agent type that `PIPELINE_AGENTS` in `model.py` does not name, so rename the names there too.
 3. Run `pwsh ./sync.ps1 check` to see what `install` would change, then `pwsh ./sync.ps1 install`. After a change
    to a hook, see it work on the live agent type ("Live check").
 4. Commit, merge and push.
@@ -257,14 +263,17 @@ python -m unittest discover -s tests -v
 python ai_team.py guard-test
 ```
 
+`guard-test` is the short check of an installation; the guard's full set of cases is
+`python -m unittest discover -s tests -k GuardTests`.
+
 Keep ledgers and handoffs that already exist readable: when a format changes, say how the old form is read, in
 the rules for what an agent reads, in the tool for the ledger and what it parses, and in `team-lead` for what it
 reads itself. A ledger records the format it is written in and the `Pipeline Version` its feature started
-under; the markdown ledger of pipeline 7.x is converted by `ai_team.py import-md`. Take such a reading out again
-once no feature in flight was started under the old form. When the rules change, raise `Pipeline Version` in
-`ai-team-pipeline.md`, the same number in step 1 of `Setup` in `team-lead`, which names the version it is
-written for, and `PIPELINE_VERSION` in the tool's `model.py`. `ai_team.py doctor` warns when the rules file and
-the tool disagree.
+under. Take such a reading out again once no feature in flight was started under the old form, as the reader
+of the markdown ledgers of pipeline 7.x was taken out with `team-lead` 12.0. When the rules change, raise
+`Pipeline Version` in `ai-team-pipeline.md`, the same number in step 1 of `Setup` in `team-lead`, which names
+the version it is written for, and `PIPELINE_VERSION` in the tool's `model.py`. `ai_team.py doctor` warns when
+any of the three disagree.
 
 `pwsh ./sync.ps1 save` copies the other way, from `~/.claude` into this repository, and removes here any team file
 that no longer exists there. Use it only to pick up an edit that was made directly in `~/.claude`. On a branch
@@ -287,8 +296,9 @@ Work in this repository, on a branch, as "Change the team" says:
    skill, its handoff name, its inputs, the area it writes, when it runs and its agent type. Then look through
    the tool for the numbers of the stages: some decisions are tied to them, such as what a stage may write
    (`stage_allowlist` in `guard.py`), what the user is told when a stage starts (`STAGE_SAYS` in `engine.py`),
-   which stages are reviews (`REVIEW_STAGES`), and when a stage runs only on a condition (`CONDITIONAL_STAGES`
-   and `_condition`). Add tests for the new stage to `tests/test_pipeline.py`.
+   which stages are reviews (`REVIEW_STAGES`), and which a fast path skips (`FAST_PATH_SKIPS`). A stage that
+   runs on a condition says so in its row (`spec:<flag>`, `adr:<flag>` or `project:<flag>`), which `_condition`
+   in `engine.py` reads. Add tests for the new stage to `tests/test_pipeline.py`.
 4. `skills/team-lead/SKILL.md`: add the stage's row to the table under "The stages", and raise the skill's
    version. This file, `model.py`, `team.json` and this README are the only files that name the new skill.
 5. `ai-team-pipeline.md`, only if the area or the artifact is new: add it to Write Isolation and to the Artifact
@@ -301,8 +311,8 @@ Work in this repository, on a branch, as "Change the team" says:
    procedure, and the tool.
 7. Give the new stage a number that leaves the others as they are. Projects key their gates and notes to stage
    numbers, and ledgers in flight list the stages by number. Where a number has to move, as Merge moved from 9
-   to 10 when the second review came in, the tool must read the old number in the ledgers in flight, as
-   `LEGACY_LABELS` in `model.py` does for the ledgers of pipeline 7.x.
+   to 10 when the second review came in, the tool must read the old number in the ledgers in flight until
+   none is left.
 8. This README: the roster under "What is here" and every count of skills and stages.
 9. Test, install, commit.
 

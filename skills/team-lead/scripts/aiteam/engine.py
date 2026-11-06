@@ -125,8 +125,6 @@ def current_handoff(ctx: Ctx, number: int) -> Optional[artifacts.Handoff]:
     led = ctx.led
     if not h.parsed or h.round != led["round"]:
         return None
-    if led.get("imported_round") is not None and led["imported_round"] == led["round"]:
-        return h
     runs = ledger.dispatches_in_round(led, number)
     if not runs:
         return None
@@ -151,18 +149,20 @@ def _note(ctx: Ctx, line: str) -> str:
 # --- conditions, completion, routing --------------------------------------------------------------
 
 def _condition(ctx: Ctx, number: int) -> Tuple[Optional[bool], Optional[str], str]:
-    if number in (2, 3):
+    """The value of a conditional stage's `runs_when`, the fingerprint it was read from, and its source."""
+    st = model.stage(number)
+    kind = st.runs_when.split(":", 1)[0]
+    if kind == "spec":
         text = ctx.text("Spec")
         if text is None:
             return None, None, "Spec"
-        flags = artifacts.topology_flags(text)
-        return (flags["User-Facing Text"] if number == 2 else flags["UI"]), _fp(text), "Spec"
-    if number == 6:
+        return artifacts.topology_flags(text)[st.flag], _fp(text), "Spec"
+    if kind == "adr":
         text = ctx.text("ADR")
         if text is None:
             return None, None, "ADR"
         return artifacts.infra_impact(text), _fp(text), "ADR"
-    if number == 9:
+    if kind == "project":
         raw = ctx.project.second_review_raw if ctx.project.exists else ""
         return bool(ctx.project.second_review), _fp("second review:" + raw), "project file"
     return True, None, ""
@@ -182,7 +182,7 @@ def _decide_conditionals(ctx: Ctx) -> bool:
             continue
         rec["decided_from"] = fp
         st = model.stage(number)
-        flag = {2: "User-Facing Text", 3: "UI", 6: "Infra Impact", 9: "Second Review"}[number]
+        flag = st.flag
         if value is None:
             ledger.notice(led, f"The {source} has no readable '{flag}' line, so {st.label} runs to be safe.")
             value = True
@@ -220,9 +220,9 @@ def _plan_items(ctx: Ctx, number: int, areas: List[str]) -> List[Dict[str, Any]]
                 route_to = model.CONDITION_WRITER.get(owner, owner)
         items.append({"area": area, "user": False, "owner": owner, "route_to": route_to, "edge": edge,
                       "unknown": False})
-    if not items:
+    if not items:  # the handoff names no area: only the user can say where it goes
         items.append({"area": "user", "user": True, "owner": None, "route_to": None, "edge": False,
-                      "unknown": True})
+                      "unknown": False})
     return items
 
 
@@ -246,9 +246,16 @@ def _complete_stages(ctx: Ctx) -> bool:
             ok = all(i["user"] or (not i["edge"] and i["route_to"] and i["route_to"] > st.number)
                      for i in items)
         if ok and st.design and not _design_artifact_exists(ctx, st.number):
-            ledger.notice(led, f"{st.label} reported {h.status}, but its artifact does not exist.")
+            paths = " or ".join(ctx.rel(a) for a in model.AREA_ARTIFACTS.get(st.writes or "", ()))
+            if led.get("missing_artifact_round", {}).get(str(st.number)) != led["round"]:
+                led.setdefault("missing_artifact_round", {})[str(st.number)] = led["round"]
+                ledger.notice(led, f"{st.label} reported {h.status}, but {paths} does not exist. "
+                                   f"It runs again with that direction.")
+            led["directions"][str(st.number)] = (
+                f"Your last run reported {h.status}, but {paths} does not exist. Write it at exactly that "
+                f"path, then your handoff.")
             ok = False
-        if ok and st.number == 4 and not led.get("fast_path"):
+        if ok and st.number == model.AREA_OWNER["ADR"] and not led.get("fast_path"):
             problem = _adr_lists_problem(ctx)
             if problem:
                 ok = False
@@ -256,10 +263,10 @@ def _complete_stages(ctx: Ctx) -> bool:
                     led["adr_problem_round"] = led["round"]
                     ledger.notice(led, f"{st.label} reported DONE, but {problem}. It runs again with that "
                                        f"direction: the guard reads that list to know what Coding may write.")
-                    led["directions"]["4"] = (
-                        f"The ADR is not complete: {problem}. Write each Allowed Blast Radius list as rules "
-                        f"section 4 says: a heading or bold label with that exact name, then one list item per "
-                        f"file starting with the path in backticks, or the one item none.")
+                led["directions"][str(st.number)] = (
+                    f"The ADR is not complete: {problem}. Write each Allowed Blast Radius list as rules "
+                    f"section 4 says: a heading or bold label with that exact name, then one list item per "
+                    f"file starting with the path in backticks, or the one item none.")
         if ok:
             rec.update(status="DONE", done_seq=ledger.next_seq(led), done_round=led["round"])
             ledger.history(led, f"{st.label}: {h.status} (round {led['round']})")
@@ -380,7 +387,8 @@ def _route_handoff(ctx: Ctx, number: int, h: artifacts.Handoff) -> None:
             "kind": "user", "stage": number, "status": h.status, "handoff": h.path,
             "reason": h.reason, "pending": normal,
             "unknown": [i["area"] for i in users if i.get("unknown")],
-            "summary": f"{model.stage(number).label} reports {h.status}, blocked on the user",
+            "summary": f"{model.stage(number).label} reports {h.status}, blocked on the user"
+                       + ("" if h.blocked_on else " (its handoff names no area)"),
         }
         ledger.history(led, f"BLOCKED: {model.stage(number).label} {h.status} on the user: {h.reason}")
         return
@@ -442,9 +450,21 @@ def _design_summary(ctx: Ctx) -> Dict[str, Any]:
             continue
         if ctx.exists(name):
             arts.append({"name": name, "path": ctx.rel(name), "revision": artifacts.revision(ctx.text(name))})
-    handoffs = [model.handoff_path(ctx.slug, n) for n in (1, 2, 3, 4)
-                if _rec(ctx, n)["status"] != "SKIPPED" and ctx.handoff(n).exists]
+    handoffs = [model.handoff_path(ctx.slug, st.number) for st in model.STAGES
+                if st.design and _rec(ctx, st.number)["status"] != "SKIPPED" and ctx.handoff(st.number).exists]
     return {"artifacts": arts, "design_handoffs": handoffs}
+
+
+def _design_fps(ctx: Ctx) -> Dict[str, Optional[str]]:
+    """Fingerprints of the design artifacts the design gate shows."""
+    out: Dict[str, Optional[str]] = {}
+    for name in ("Spec", "Copy file", "Copy audit", "UI spec", "ADR"):
+        writer = model.ARTIFACT_WRITER[name]
+        if writer and _rec(ctx, writer)["status"] == "SKIPPED":
+            continue
+        if ctx.exists(name):
+            out[name] = _fp(ctx.text(name))
+    return out
 
 
 def _options(kind: str, aw: Dict[str, Any], slug: str) -> List[Dict[str, str]]:
@@ -578,15 +598,23 @@ def _design_gate(ctx: Ctx, cur: int) -> Optional[Dict[str, Any]]:
         return None
     revs = {"spec": ctx.spec_rev(), "adr": ctx.adr_rev()}
     approved = led.get("approved_design")
-    if gate == "APPROVED" and approved and (approved.get("spec"), approved.get("adr")) != (revs["spec"], revs["adr"]):
+    changed: List[str] = []
+    if approved:
+        if approved.get("fp") is not None:  # what was approved, artifact by artifact
+            now = _design_fps(ctx)
+            changed = sorted(n for n in set(now) | set(approved["fp"]) if now.get(n) != approved["fp"].get(n))
+        elif (approved.get("spec"), approved.get("adr")) != (revs["spec"], revs["adr"]):
+            changed = ["Spec", "ADR"]  # an approval recorded before fingerprints: revisions only
+    if gate == "APPROVED" and changed:
         led["design_gate"] = gate = "PENDING"
-        ledger.history(led, f"Design Gate: PENDING, the design changed since its approval "
+        ledger.history(led, f"Design Gate: PENDING, changed since its approval: {', '.join(changed)} "
                             f"(now spec r{revs['spec']}, ADR r{revs['adr']})")
     if cur < model.FIRST_BUILD_STAGE or gate != "PENDING":
         return None
     led["awaiting"] = {
         "kind": "design_gate", "summary": "the user's approval of the design",
-        "reopened": bool(approved), "previous": approved, "current": revs,
+        "reopened": bool(approved), "previous": approved and {k: approved.get(k) for k in ("spec", "adr")},
+        "current": revs, "changed": changed,
     }
     ledger.history(led, "Design gate opened" + (" again" if approved else ""))
     return _ask(ctx, led["awaiting"])
@@ -621,25 +649,45 @@ def _direction(ctx: Ctx, number: int) -> str:
     return led.get("request_short") or led.get("request") or ""
 
 
+def _last_run(ctx: Ctx, number: int) -> str:
+    """What the last run of a stage that is dispatched again brought back, in a few words."""
+    led = ctx.led
+    st = model.stage(number)
+    h = ctx.handoff(number)
+    if not h.exists:
+        return "no handoff"
+    if not h.parsed:
+        return "a handoff whose Status or Round line could not be read"
+    if h.round != led["round"]:
+        return f"a handoff of round {h.round}, not of round {led['round']}"
+    if not _status_ok(number, h.status):
+        return f"a handoff with status {h.status}, which this stage does not report"
+    if not current_handoff(ctx, number):
+        return "only a handoff older than its dispatch"
+    if st.design and not _design_artifact_exists(ctx, number):
+        return f"a {h.status} handoff, but not its artifact"
+    if st.number == model.AREA_OWNER["ADR"] and not led.get("fast_path") and _adr_lists_problem(ctx):
+        return "a DONE handoff, but an ADR whose Allowed Blast Radius lists could not be read"
+    return f"a handoff with status {h.status}"
+
+
 def _dispatch_action(ctx: Ctx, number: int) -> Dict[str, Any]:
     led = ctx.led
     st = model.stage(number)
     runs = ledger.dispatches_in_round(led, number)
     again = False
+    what = ""
     if runs:
-        h = ctx.handoff(number)
+        what = _last_run(ctx, number)
         if len(runs) >= 2:
-            what = ("no handoff" if not h.exists else
-                    f"a handoff that is not of round {led['round']}" if h.round != led["round"] else
-                    f"a handoff with status {h.status}")
             led["awaiting"] = {"kind": "no_report", "stage": number,
                                "summary": f"{st.label} returned twice with no usable report ({what})",
                                "handoff": model.handoff_path(ctx.slug, number)}
-            ledger.history(led, f"BLOCKED: {st.label} returned twice with no usable report")
+            ledger.history(led, f"BLOCKED: {st.label} returned twice with no usable report ({what})")
             return _ask(ctx, led["awaiting"])
         again = True
     led["gate_status"] = "IN_PROGRESS"
-    if (number == 7 and not runs and (led.get("workflow") or {}).get("kind") == "worktree"
+    if (number == model.AREA_OWNER["Tests"] and not runs and (led.get("workflow") or {}).get("kind") == "worktree"
             and led.get("updated_round") != led["round"] and not led.get("merge")):
         return {"type": "update", "stage": number, "base": led["workflow"].get("base"),
                 "say": "Before Testing, bring the feature's branch up to date with its base "
@@ -656,7 +704,7 @@ def _dispatch_action(ctx: Ctx, number: int) -> Dict[str, Any]:
                        "run `scan` until it dispatches the review."}
     say = f"{st.label} starts" + (" again" if again else "") + f": {STAGE_SAYS.get(number, '')}."
     if again:
-        say += " The last run brought no usable report."
+        say += f" The last run brought {what}."
     return {"type": "dispatch", "stage": number, "label": st.label, "skill": st.skill,
             "runs_in": "fork" if st.isolated else "conversation", "direction": _direction(ctx, number),
             "again": again, "say": say}
@@ -734,8 +782,8 @@ def _inputs(ctx: Ctx, number: int) -> List[str]:
     for earlier in model.STAGES:
         if earlier.number >= number or earlier.number == model.MERGE_STAGE:
             continue
-        if _rec(ctx, earlier.number)["status"] == "SKIPPED":
-            continue
+        if _rec(ctx, earlier.number)["status"] == "SKIPPED" or earlier.review:
+            continue  # a review's handoff goes to no later stage: the second review stays independent
         h = ctx.handoff(earlier.number)
         if h.exists and h.has_for_later:
             paths.append(h.path)
@@ -757,7 +805,8 @@ def dispatch_text(ctx: Ctx, number: int, direction: str) -> str:
         f"Inputs: {', '.join(inputs) if inputs else 'none'}",
         f"Handoff: {model.handoff_path(ctx.slug, number)}",
     ]
-    defects = [d for d in led["active_defects"] if d.get("owner") == number and not d.get("user")]
+    defects = [d for d in led["active_defects"]
+               if number in (d.get("route_to"), d.get("owner")) and not d.get("user")]
     if defects:
         lines.append("Defects:")
         lines += [f"- {d['area']}: {d['line']} ({d.get('handoff') or 'the user'})" for d in defects]
@@ -917,11 +966,19 @@ def returned(ctx: Ctx, number: Optional[int] = None, do_dispatch: bool = False,
             for item in checked["notes"]:
                 ledger.notice(led, f"{item['path']} changed while {st.label} ran. An 'always allow' answer you "
                                    f"gave lands there; if you gave none, look at it.")
+            before, now = manifest.get("head"), gitio.head(ctx.root)
+            moved = (f"HEAD moved from {before[:12]} to {(now or 'nothing')[:12]} while {st.label} ran: "
+                     f"`git log {before[:12]}..HEAD` shows what was committed; `git reset --soft {before[:12]}` "
+                     f"undoes the commits and keeps the files") if before and now != before else ""
             if found:
                 led["awaiting"] = {"kind": "violation", "stage": number, "files": found, "snapshot": folder,
-                                   "summary": f"{st.label} changed files outside its area"}
+                                   "summary": f"{st.label} changed files outside its area"
+                                              + (f"; {moved}" if moved else "")}
                 ledger.history(led, f"BLOCKED: {st.label} changed files outside its area: "
-                                    + ", ".join(f["path"] for f in found))
+                                    + ", ".join(f["path"] for f in found) + (f"; {moved}" if moved else ""))
+            elif moved:
+                led["awaiting"] = {"kind": "blocked", "stage": number, "summary": moved}
+                ledger.history(led, f"BLOCKED: {moved}")
             result["outside_area"] = found
     guard.clear_active(ctx.root)
     h = ctx.handoff(number)
@@ -946,6 +1003,10 @@ def decide(ctx: Ctx, decision: str, text: Optional[str] = None, area: Optional[s
     answer = " ".join((text or "").split())
     said: Dict[str, Any] = {"decision": decision}
 
+    if led["gate_status"] == "REJECTED" and decision != "stop":
+        raise PipelineError("the feature is shelved: it takes resume, rollback or stop, and a resumed feature "
+                            "asks for the design again")
+
     if decision == "stop":
         wf = led["workflow"]["kind"]
         return _finish(ctx, {"action": {"type": "stop", "procedure": f"git-workflow-{wf}.md, section Stop",
@@ -954,7 +1015,7 @@ def decide(ctx: Ctx, decision: str, text: Optional[str] = None, area: Optional[s
     if decision == "approve":
         if kind == "design_gate":
             led["design_gate"] = "APPROVED"
-            led["approved_design"] = {"spec": ctx.spec_rev(), "adr": ctx.adr_rev()}
+            led["approved_design"] = {"spec": ctx.spec_rev(), "adr": ctx.adr_rev(), "fp": _design_fps(ctx)}
             ledger.history(led, f"Design Gate: APPROVED (spec r{ctx.spec_rev()}, ADR r{ctx.adr_rev()})")
         elif kind == "mockup_gate":
             led["mockup_gate"] = "APPROVED"
@@ -985,12 +1046,14 @@ def decide(ctx: Ctx, decision: str, text: Optional[str] = None, area: Optional[s
             backward_route(ctx, item["route_to"], f"change request at the {kind.replace('_', ' ')}: {answer}")
             led["directions"][str(item["route_to"])] = answer
         elif kind == "user" and aw.get("status") == "DEFECTS":
+            item = _plan_items(ctx, aw["stage"], [norm])[0]
+            if item["edge"]:
+                raise PipelineError(f"{norm} belongs to a stage the fast path skips: accept the finding, have "
+                                    f"it changed in another area, stop, or move the feature to all the stages "
+                                    f"(`fast-path {ctx.slug} to-full`)")
             _close_user_items(ctx)
             led["awaiting"] = None
             _note(ctx, f"The user had a finding of {model.stage(aw['stage']).label} changed: {answer}")
-            item = _plan_items(ctx, aw["stage"], [norm])[0]
-            if item["edge"]:
-                raise PipelineError(f"{norm} belongs to a stage the fast path skips: see lanes.md, Leave")
             pending = [i for i in (aw.get("pending") or []) if i.get("route_to") != item["route_to"]]
             _apply_items(ctx, aw["stage"], "DEFECTS", [item] + pending, aw.get("handoff"), answer, counted=False)
             led["directions"][str(item["route_to"])] = answer
@@ -1052,12 +1115,14 @@ def decide(ctx: Ctx, decision: str, text: Optional[str] = None, area: Optional[s
                 if item.get("owner") is None:
                     item["resolved"] = True
             led["awaiting"] = None
-            ledger.history(led, "The user resolved the conflicts that lie in no area")
+            ledger.history(led, "The user resolved the conflicts no running stage writes")
         elif kind is None:
             pass
         else:
             led["awaiting"] = None
             ledger.history(led, f"The user went on after: {aw.get('summary', kind)}")
+        if answer and kind != "user":  # the user's words reach the later stages through the notes
+            said["noted"] = _note(ctx, f"The user said: {answer}")
 
     elif decision == "revert":
         if kind != "violation":
@@ -1071,9 +1136,19 @@ def decide(ctx: Ctx, decision: str, text: Optional[str] = None, area: Optional[s
                 _reset_stage(ctx, n)
         led["round"] += 1
         files = ", ".join(f["path"] for f in aw["files"])
+        own_area = model.stage(stage_no).writes
+        own = [f["path"] for f in aw["files"] if f.get("area") == own_area]
+        others = [f["path"] for f in aw["files"] if f.get("area") != own_area]
+        parts = []
+        if own:
+            parts.append(f"{', '.join(own)} lie in your area but are not among the files you may change (the "
+                         f"ADR's Allowed Blast Radius, or the Files line on a fast path)")
+        if others:
+            parts.append(f"{', '.join(others)} lie outside your area")
         led["directions"][str(stage_no)] = (
-            f"Your last run changed files outside your area ({files}); they were put back. Change only "
-            f"files of your area. If your work needs one of those files, report ESCALATE.")
+            f"Your last run changed files it may not change, and they were put back: {'; '.join(parts)}. "
+            f"If your work needs one of them, report ESCALATE: blocked on ADR for a file of your area, else on "
+            f"the area the file lies in.")
         ledger.history(led, f"Reverted {files}; {model.stage(stage_no).label} runs again, round {led['round']}")
         if res["failed"]:
             ledger.notice(led, "Could not put back: " + ", ".join(res["failed"]))
@@ -1122,8 +1197,20 @@ def validate_slug(root: str, slug: str) -> None:
         raise PipelineError(f"a ledger for '{slug}' exists already")
     if os.path.isfile(os.path.join(root, *model.artifact_path("Spec", slug).split("/"))):
         raise PipelineError(f"a spec for '{slug}' exists already")
-    if gitio.branch_exists(root, f"agent/{slug}"):
-        raise PipelineError(f"the branch agent/{slug} exists already")
+    branch = f"agent/{slug}"
+    if gitio.branch_exists(root, branch) and gitio.current_branch(root) != branch:
+        raise PipelineError(f"the branch {branch} exists already")  # the worktree's own branch is no clash
+
+
+def _fast_path_files(root: str, files: List[str]) -> List[str]:
+    """Files of a fast path; a file in Infra is refused, since a fast path does not run Infra."""
+    project = projmod.load(root)
+    files = [projmod.to_posix(f) for f in files]
+    infra = [f for f in files if project.area_of(f) == "Infra"]
+    if infra:
+        raise PipelineError(f"{', '.join(infra)} lies in Infra, which a fast path does not build: narrow the "
+                            f"change, or run it through all the stages")
+    return files
 
 
 def new_feature(root: str, slug: str, request: str, workflow: str, start_point: str, base: Optional[str] = None,
@@ -1140,10 +1227,11 @@ def new_feature(root: str, slug: str, request: str, workflow: str, start_point: 
     if lane == "fast":
         if not files:
             raise PipelineError("a fast path needs --files: the files in Source and Infra the change touches")
-        led["fast_path"] = {"request": short or request, "files": [projmod.to_posix(f) for f in files]}
+        # the request stands in for the Acceptance Criteria, so the stages get all of it, on one line
+        led["fast_path"] = {"request": " ".join(request.split()), "files": _fast_path_files(root, files)}
         led["design_gate"] = model.FAST_PATH_GATE
         led["mockup_gate"] = "SKIPPED"
-        skipped = {1, 2, 3, 4, 6} | set(int(s) for s in (skip_stages or []))
+        skipped = set(model.FAST_PATH_SKIPS) | set(int(s) for s in (skip_stages or []))
         for n in sorted(skipped):
             if n in (model.MERGE_STAGE,):
                 raise PipelineError("Merge is never skipped")
@@ -1162,12 +1250,13 @@ def recover(root: str, slug: str, workflow: str, start_point: str, base: Optiona
     if os.path.isfile(os.path.join(root, *model.ledger_json_path(slug).split("/"))):
         raise PipelineError(f"a ledger for '{slug}' exists already")
     if os.path.isfile(os.path.join(root, *model.ledger_md_path(slug).split("/"))):
-        raise PipelineError(f"'{slug}' has a ledger from pipeline 7.x: run `import-md {slug}` instead")
+        raise PipelineError(f"'{slug}' has a markdown ledger from before pipeline 8.0, which this version does "
+                            f"not read")
     led = ledger.new_ledger(slug, f"(recovered) {slug}", workflow, base, start_point)
     ctx = Ctx(root, slug, led, skill_dir)
-    for n in (1, 2, 3, 4):
-        if _design_artifact_exists(ctx, n):
-            ledger.stage_rec(led, n).update(status="DONE", done_seq=ledger.next_seq(led), done_round=0)
+    for st in model.STAGES:
+        if st.design and _design_artifact_exists(ctx, st.number):
+            ledger.stage_rec(led, st.number).update(status="DONE", done_seq=ledger.next_seq(led), done_round=0)
     ledger.history(led, f"Pipeline Version {model.PIPELINE_VERSION}; recovered from its artifacts")
     ledger.save(root, led)
     return ctx
@@ -1186,7 +1275,7 @@ def fast_path(ctx: Ctx, op: str, path: Optional[str] = None, files: Optional[Lis
             raise PipelineError("add-file needs a path")
         if not aw or aw["kind"] != "fast_path_edge":
             raise PipelineError("add-file answers a feature at the edge of its fast path")
-        led["fast_path"]["files"].append(projmod.to_posix(path))
+        led["fast_path"]["files"] += _fast_path_files(ctx.root, [path])
         led["awaiting"] = None
         led["round"] += 1
         stage_no = aw["stage"]
@@ -1197,7 +1286,7 @@ def fast_path(ctx: Ctx, op: str, path: Optional[str] = None, files: Optional[Lis
         if not aw or aw["kind"] != "fast_path_edge":
             raise PipelineError("stay answers a feature at the edge of its fast path")
         if files:
-            led["fast_path"]["files"] = [projmod.to_posix(f) for f in files]
+            led["fast_path"]["files"] = _fast_path_files(ctx.root, files)
         led["awaiting"] = None
         led["round"] += 1
         stage_no = aw["stage"]
@@ -1264,8 +1353,9 @@ def route_conflicts(ctx: Ctx, base: str, do_dispatch: bool = False) -> Dict[str,
     unowned = [i["path"] for i in items if not i["owner"]]
     if unowned:
         led["awaiting"] = {"kind": "conflict_unowned", "files": unowned,
-                           "summary": "conflicting files that lie in no area are the user's to resolve"}
-        ledger.history(led, "BLOCKED: conflicts in files of no area: " + ", ".join(unowned))
+                           "summary": "conflicting files that no running stage writes (no area, or the area of "
+                                      "a skipped stage) are the user's to resolve"}
+        ledger.history(led, "BLOCKED: conflicts in files no running stage writes: " + ", ".join(unowned))
     return next_action(ctx, do_dispatch)
 
 
@@ -1394,39 +1484,12 @@ def verify_delivery(ctx: Ctx) -> Dict[str, Any]:
                     "paths": sorted(change_fingerprint(ctx))}
         raise PipelineError("no change record was reviewed for this feature")
     now = change_fingerprint(ctx)
-    before = reviewed.get("fingerprint")
-    if before is None:  # a review recorded before fingerprints existed: compare the record text
-        text = change_record_text(ctx)
-        ok = hashlib.sha256(text.encode("utf-8")).hexdigest() == reviewed["sha256"]
-        old_paths = _record_paths(projmod.read_text(ctx.abs(model.change_record_path(ctx.slug))) or "")
-        new_paths = _record_paths(text)
-        changed = sorted(p for p in set(old_paths) | set(new_paths) if old_paths.get(p) != new_paths.get(p))
-    else:
-        changed = sorted(p for p in set(before) | set(now) if before.get(p) != now.get(p))
-        ok = not changed
-    out: Dict[str, Any] = {"unchanged": ok, "paths": sorted(now)}
-    if not ok:
+    before = reviewed.get("fingerprint") or {}
+    changed = sorted(p for p in set(before) | set(now) if before.get(p) != now.get(p))
+    out: Dict[str, Any] = {"unchanged": not changed, "paths": sorted(now)}
+    if changed:
         out["changed_paths"] = changed
     return out
-
-
-def _record_paths(record: str) -> Dict[str, str]:
-    """Path -> digest of its part of a change record (status line and diff hunk)."""
-    parts: Dict[str, List[str]] = {}
-    current = None
-    for line in record.splitlines():
-        m = re.match(r"^diff --git a/(.+?) b/(.+)$", line)
-        if m:
-            current = m.group(2)
-            parts.setdefault(current, []).append(line)
-            continue
-        if current is None:
-            st = re.match(r"^.{2} (?:.+ -> )?(.+)$", line)
-            if st:
-                parts.setdefault(st.group(1).strip('"'), []).append(line)
-            continue
-        parts[current].append(line)
-    return {p: hashlib.sha256("\n".join(v).encode()).hexdigest() for p, v in parts.items()}
 
 
 def review_again(ctx: Ctx, do_dispatch: bool = False) -> Dict[str, Any]:
@@ -1436,6 +1499,9 @@ def review_again(ctx: Ctx, do_dispatch: bool = False) -> Dict[str, Any]:
         led["review_again_streak"] = 0
         backward_route(ctx, model.REVIEW_STAGE, "paths changed after the review; the user asked for a new review")
         return next_action(ctx, do_dispatch)
+    if ledger.current_stage(led) < model.MERGE_STAGE:
+        raise PipelineError("review-again follows a change after the review, at delivery or after it: "
+                            + _where(ctx))
     led["review_again_streak"] = int(led.get("review_again_streak", 0)) + 1
     if led["review_again_streak"] >= 2:
         check = verify_delivery(ctx)
@@ -1455,6 +1521,13 @@ def delivered(ctx: Ctx, commit: Optional[str] = None) -> Dict[str, Any]:
         raise PipelineError("not every stage before Merge is DONE or SKIPPED: " + _where(ctx))
     if led["active_defects"]:
         raise PipelineError("items are still open: " + ", ".join(d["line"] for d in led["active_defects"]))
+    if led.get("awaiting"):
+        raise PipelineError(f"a question is open: {led['awaiting'].get('summary', led['awaiting']['kind'])}. "
+                            f"Answer it first.")
+    check = verify_delivery(ctx)
+    if not check["unchanged"]:
+        raise PipelineError("what would be delivered is not what the review saw ("
+                            + ", ".join(check.get("changed_paths", [])) + "): run `review-again`")
     rec = _rec(ctx, model.MERGE_STAGE)
     rec.update(status="DONE", done_seq=ledger.next_seq(led), done_round=led["round"])
     led["gate_status"] = "READY_FOR_MERGE"
@@ -1481,11 +1554,7 @@ def verify_delivered(ctx: Ctx) -> Dict[str, Any]:
         check = verify_delivery(ctx)
         return {"ready": True, "state": "uncommitted", **check}
     names = set(gitio.diff_names(root, led["start_point"]))
-    fingerprint = (led.get("reviewed_change_record") or {}).get("fingerprint")
-    if fingerprint is not None:
-        reviewed = set(fingerprint)
-    else:
-        reviewed = set(_record_paths(projmod.read_text(ctx.abs(model.change_record_path(ctx.slug))) or ""))
+    reviewed = set((led.get("reviewed_change_record") or {}).get("fingerprint") or {})
     return {"ready": True, "unchanged": names == reviewed, "state": "committed", "paths": sorted(names),
             "unexpected": sorted(names - reviewed), "missing": sorted(reviewed - names)}
 
@@ -1571,7 +1640,6 @@ def purge(ctx: Ctx) -> Dict[str, Any]:
 def status_all(root: str) -> Dict[str, Any]:
     folder = os.path.join(root, *model.STATE_DIR.split("/"))
     features = []
-    legacy = []
     if os.path.isdir(folder):
         for name in sorted(os.listdir(folder)):
             if name.endswith("-pipeline.json"):
@@ -1584,11 +1652,6 @@ def status_all(root: str) -> Dict[str, Any]:
                 features.append({"slug": slug, "gate_status": led["gate_status"], "round": led["round"],
                                  "current_stage": model.stage(cur).label if cur <= model.LAST_STAGE else "none",
                                  "waiting_on": (led.get("awaiting") or {}).get("summary")})
-            elif name.endswith("-pipeline.md"):
-                slug = name[: -len("-pipeline.md")]
-                if not os.path.isfile(os.path.join(folder, f"{slug}-pipeline.json")) and not slug.endswith(".v7"):
-                    legacy.append(slug)
     active = [f for f in features if f["gate_status"] not in ("READY_FOR_MERGE", "REJECTED")]
     return {"ok": True, "features": features, "active": [f["slug"] for f in active],
-            "rejected": [f["slug"] for f in features if f["gate_status"] == "REJECTED"],
-            "legacy_ledgers": legacy}
+            "rejected": [f["slug"] for f in features if f["gate_status"] == "REJECTED"]}

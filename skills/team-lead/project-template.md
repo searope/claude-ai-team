@@ -58,7 +58,7 @@ files, but takes no screenshots and cannot check how the page renders.
 
 ## Scans
 
-`ai_team.py` runs these before every review, from the feature's folder, and
+`ai_team.py` runs these once per round, before its first review, from the feature's folder, and
 gives the reviewers their output. A scan fails on a non-zero exit code, or when
 its output matches the pattern after `fails when`. Each is a list item with the
 command in backticks. `ai_team.py propose-gates` suggests them for the stack.
@@ -71,8 +71,7 @@ The user approves a list once, and again whenever it changes.
 - **Second Review:** no
 
 `yes` adds stage 9: a second read-only review of the same change on another
-model (the `second-reviewer` skill), after Security. It costs one more review
-per round.
+model, after Security. It costs one more review per round.
 
 ## Overrides for this project
 

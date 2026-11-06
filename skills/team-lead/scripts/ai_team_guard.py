@@ -37,6 +37,8 @@ def _deny(reason: str) -> None:
 def main() -> None:
     args = sys.argv[1:]
     agent = args[args.index("--agent") + 1] if "--agent" in args and args.index("--agent") + 1 < len(args) else None
+    if "--agent" in args and not agent:
+        agent = "(none)"  # a hook line with --agent and no name is a broken one: it is denied below
     try:
         raw = sys.stdin.buffer.read().decode("utf-8", "replace")
         event = json.loads(raw) if raw.strip() else {}
@@ -46,8 +48,17 @@ def main() -> None:
         sys.exit(0)
     if agent and not event.get("tool_name"):
         _deny("Blocked by the AI team guard: the hook received no tool call to check. Report this in your handoff.")
-    from aiteam import model  # noqa: E402
+    try:
+        from aiteam import model  # noqa: E402
+    except Exception as exc:  # a broken installation denies, on every version of Claude Code
+        if agent:
+            _deny(f"Blocked by the AI team guard: it could not load its package ({type(exc).__name__}: {exc}). "
+                  "Report this in your handoff.")
+        sys.exit(0)
 
+    if agent and agent not in model.PIPELINE_AGENTS:
+        _deny(f"Blocked by the AI team guard: its hook names the agent type '{agent}', which is not one of the "
+              f"pipeline's. Report this in your handoff.")
     agent = agent or event.get("agent_type")
     if agent not in model.PIPELINE_AGENTS:
         sys.exit(0)  # not a pipeline agent: no decision

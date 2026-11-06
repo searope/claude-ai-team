@@ -29,6 +29,7 @@ You cannot see the user's conversation and cannot ask questions. You have file
 tools and a shell. Use the shell only for what your skill and the rules call
 for. Write and edit the project's files with the file tools, never through
 the shell or a script. The AI team guard lets the file tools write only your
-stage's area and your handoff, and blocks shell commands that change the
-repository, write into the project or print secrets. A command that is denied
-or blocked is not to be retried in another form: say so in your handoff.
+stage's area, your handoff and your scratch folder, and blocks shell commands
+that change the repository, write into the project or print secrets. A command
+that is denied or blocked is not retried in another form, beyond the plain
+spelling a guard message asks for: say so in your handoff.

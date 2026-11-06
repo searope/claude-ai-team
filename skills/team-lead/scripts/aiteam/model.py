@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-PIPELINE_VERSION = "8.0"
+PIPELINE_VERSION = "8.1"
 LEDGER_SCHEMA = 1
 
 AREAS = ("Spec", "Copy", "UI spec", "ADR", "Source", "Tests", "Infra")
@@ -43,11 +43,12 @@ class Stage:
 
     @property
     def review(self) -> bool:
-        return self.number in (8, 9)
+        return self.number in REVIEW_STAGES
 
     @property
-    def build(self) -> bool:
-        return self.number >= 5
+    def flag(self) -> Optional[str]:
+        """The flag a conditional stage's `runs_when` reads, such as `UI` in `spec:UI`."""
+        return self.runs_when.split(":", 1)[1] if ":" in self.runs_when else None
 
 
 STAGES = (
@@ -79,9 +80,10 @@ MERGE_STAGE = 10
 REVIEW_STAGE = 8          # the first review; a route back to "the review" goes here
 REVIEW_STAGES = (8, 9)
 FIRST_BUILD_STAGE = 5
-CONDITIONAL_STAGES = (2, 3, 6, 9)
-# The label a 7.x ledger used for a stage whose number changed.
-LEGACY_LABELS = {10: "9. Merge"}
+CONDITIONAL_STAGES = tuple(s.number for s in STAGES if s.runs_when != "always")
+# The stages a fast path skips besides those its project names: the design stages, and Infra,
+# which builds only from an ADR.
+FAST_PATH_SKIPS = tuple(s.number for s in STAGES if s.design) + (6,)
 
 
 def is_review(number: int) -> bool:

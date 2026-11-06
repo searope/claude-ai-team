@@ -56,7 +56,7 @@ allowed-tools:
   - "PowerShell(git branch --list *)"
   - "PowerShell(gh issue view *)"
 metadata:
-  version: "11.2"
+  version: "12.0"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 
@@ -85,8 +85,8 @@ python "${CLAUDE_SKILL_DIR}/scripts/ai_team.py" <command> ...
 ```
 
 Each command prints one JSON object. `"ok": false` means it refused or failed:
-tell the user its `error` in plain words and stop; never work around it, and
-never edit `.ai-team/state/` yourself. The commands you use most:
+tell the user its `error` in plain words and stop; never work around it. The
+commands you use most:
 
 | Command | What it does |
 | :--- | :--- |
@@ -102,10 +102,11 @@ never edit `.ai-team/state/` yourself. The commands you use most:
 | `ai_team doctor` | Checks the installation and the project |
 
 The git workflow procedures name the others (`updated`, `route-conflicts`,
-`merged`, `route-back`, `verify-delivery`, `review-again`, `delivered`,
-`verify-delivered`, `set`, `stop-list`, `purge`). `--dispatch` performs a
-dispatch when the next action is one; leave it out only to look. Run `scan`
-with the shell tool's longest timeout (10 minutes): scanners can be slow.
+`merged`, `route-back`, `verify-delivery`, `review-again`, `delivered`, `set`,
+`stop-list`, `purge`); section 6 names `verify-delivered`, and Invocation
+`recover`. `--dispatch` performs a dispatch when the next action is one; leave
+it out only to look. Run `scan` with the shell tool's longest timeout (10
+minutes): scanners can be slow.
 
 ---
 
@@ -114,8 +115,8 @@ Arguments: $ARGUMENTS
 
 - **The first word is the slug of an existing feature:** continue it. A
   feature exists when `.ai-team/state/<slug>-pipeline.json` exists. If only
-  `<slug>-pipeline.md` exists, the feature started under pipeline 7.x: run
-  `ai_team import-md <slug>` first, and tell the user. If the ledger is not in
+  `<slug>-pipeline.md` exists, the feature was started under a pipeline before
+  8.0, which this version does not read: tell the user, and stop. If the ledger is not in
   this folder, `git worktree list` shows the worktree whose branch is
   `agent/<slug>`: move the session there with the `EnterWorktree` tool and its
   `path`, or tell the user which folder to open. Anything after the slug is the
@@ -143,13 +144,14 @@ Arguments: $ARGUMENTS
   workflow chosen. The rest is the request.
 - **Anything else:** a new feature. The request is a description, or an
   issue: a number, `#` and a number, or the address of an issue. An issue whose
-  feature exists already continues that feature; a direction with no slug, such
+  feature exists already continues that feature: its slug begins with the
+  issue's number, so look for it where **Empty** looks; a spec with that number
+  and no ledger is a delivered feature (below). A direction with no slug, such
   as `approve` alone, goes to the feature that **Empty** picks.
 - **Empty:** run `ai_team status`. If exactly one feature is `active`, that is
   the feature, with no direction. Otherwise ask the user which one. Name the
-  `rejected` ones as available to resume, the `legacy_ledgers` as needing
-  import, and the worktrees on `agent/` branches that `git worktree list` shows:
-  each of those holds its own ledger.
+  `rejected` ones as available to resume, and the worktrees on `agent/`
+  branches that `git worktree list` shows: each of those holds its own ledger.
 
 A slug that has a spec but no ledger is a feature whose working files are gone:
 it was delivered and its worktree removed, or `.ai-team/` was deleted. Do not
@@ -184,7 +186,8 @@ In the project:
 - **What you write yourself:** the handoff of an agent that has no
   file-writing tools, and a `.gitignore` entry that is missing; at project
   initiation, the project file and its import line. Everything else under
-  `.ai-team/` is written by `ai_team`.
+  `.ai-team/` is written by `ai_team`, or by the stages (their handoffs, the
+  mock-up).
 
 ---
 
@@ -240,15 +243,16 @@ In the project:
 | 10. Merge | you | | Always | `Deliver` of the git workflow |
 
 The stages up to Architecture are the design stages. The mock-up gate follows
-UI/UX, and the design gate stands before Coding. Before each review, `ai_team`
-runs the scans of the project file's `Scans` section itself and gives the
-reviewers their report: those checks rest on tools, not on any agent's word.
+UI/UX, and the design gate stands before Coding. Once per round, before its
+first review, `ai_team` runs the scans of the project file's `Scans` section
+itself and gives the reviewers their report: those checks rest on tools, not on
+any agent's word. A fast path skips the design stages and Infra, which builds
+only from an ADR.
 
 Discovery always asks the user its questions at the start (rules, section 6).
 A project rule that has the stages ask the user nothing does not reach it, so
 never settle the user's decisions yourself in its place. On a lane without
-Discovery, put the decisions the request leaves to the user to the user
-yourself before the first stage.
+Discovery, you ask them yourself (section 2, step 3).
 
 ---
 
@@ -257,7 +261,7 @@ yourself before the first stage.
 ### 1. Setup
 Do this on every run.
 1. `Read` the rules file, unless this conversation already holds it at
-   `Pipeline Version` 8.0, the version this skill is written for.
+   `Pipeline Version` 8.1, the version this skill is written for.
 2. Run `ai_team doctor` once per session. Tell the user each warning in plain
    words; a missing project file is the first run, below. When it says the
    project sets no Gates and no Scans, run `ai_team propose-gates` and show the
@@ -287,10 +291,17 @@ Do this on every run.
    or the request asks for a lighter lane or calls itself trivial, `Read` the
    lanes file and carry out its `Choose` now, before anything is created.
    Otherwise the request runs in full, and there is nothing to choose or say.
-3. **The slug.** `<issue number>-<short name>` for an issue, a short name
+3. **The questions, on a fast path.** No Discovery runs, so ask the user now
+   every decision the request or its issue leaves to them, as Discovery would:
+   with `AskUserQuestion` when it is available. Then hold the request with the
+   answers against the lane's conditions once more, as the lanes file's
+   `Choose` says. The answers reach the stages as notes: create the feature in
+   step 7 without `--dispatch`, run `ai_team note <slug> "<answer>"` for each,
+   then `ai_team next <slug> --dispatch`.
+4. **The slug.** `<issue number>-<short name>` for an issue, a short name
    otherwise: kebab-case, two to four words. `ai_team new` refuses a slug that
    is taken. Tell the user the slug.
-4. **The workflow.** In place or in a worktree; chosen now, and it does not
+5. **The workflow.** In place or in a worktree; chosen now, and it does not
    change for the feature.
    - A project file that says `worktree only` or `in-place only` leaves no
      choice: use that workflow, and refuse a command or a session that asks for
@@ -315,10 +326,10 @@ Do this on every run.
    | When the base branch moves | Nothing is done; the user deals with it when committing | You merge the base branch into the feature's branch before each run of Testing |
    | What is left to the user | Review and commit; the next feature can start only after that | Merge the branch or push it, then remove the worktree |
 
-5. **Start.** `Read` the procedure of the chosen workflow, unless the project's
+6. **Start.** `Read` the procedure of the chosen workflow, unless the project's
    `Git Workflow` override replaces all of it, and carry out its `Start`. It
    gives you the `Start Point`.
-6. **Create the feature.** Run `ai_team new` with the request, a one-line
+7. **Create the feature.** Run `ai_team new` with the request, a one-line
    `--short` (for an issue: its number and title), the workflow, the
    `--start-point`, the `--base` in a worktree, and on a fast path `--lane fast`,
    the files, the extra stages the project's rule skips, and the condition that
@@ -334,10 +345,12 @@ Every command returns an `action`. Do what its `type` says:
   exactly as given.
   - **A stage that runs in this conversation** (Discovery) is a dialogue with
     the user and may take several turns. First tell the user anything from
-    setup they have not heard yet. When its handoff reports `DONE`, invoke this
-    skill again as `team-lead <slug> returned` with the `Skill` tool in the
-    same turn, so that its instructions and tool grants are fresh; that runs
-    `ai_team returned <slug> --dispatch`.
+    setup they have not heard yet. It has the request from this conversation:
+    when the conversation does not hold it, as in a new session, give it on
+    `--direction`. When it has written its handoff, whatever its status,
+    invoke this skill again as `team-lead <slug> returned` with the `Skill`
+    tool in the same turn, so that its instructions and tool grants are fresh;
+    that runs `ai_team returned <slug> --dispatch`.
   - **A stage that runs in a fork** shows nothing while it runs, and one with a
     long gate can take many minutes. When it returns: if it is a review
     (Security or Second Review), which has no file-writing tools, and its
@@ -354,8 +367,8 @@ Every command returns an `action`. Do what its `type` says:
   procedure.
 - **`deliver`:** `Deliver` of the feature's git workflow.
 - **`ready`:** report the feature as `READY_FOR_MERGE` (section 7).
-- **`rejected`:** the feature is shelved: it takes `resume`, `rollback` or
-  `stop`.
+- **`rejected`:** the feature is shelved: say `action.say`.
+- **`stop`:** `Stop` of the feature's git workflow.
 
 Also, on every output:
 - **`notices`:** tell the user each one, in plain words.
@@ -391,7 +404,8 @@ Without the tool, or when the question goes unanswered, stop.
   and `Infra Impact`. Read the handoffs in `details.design_handoffs` and name
   the slips the design stages remarked on in each other's artifacts: the user
   can have them changed. When `details.reopened` is true, lead with what changed
-  since the approval of `details.previous` and why. When `details.mockup` is
+  since the approval of `details.previous` (`details.changed` names the
+  artifacts) and why. When `details.mockup` is
   there, the user approved it already: give the links to its files in one line,
   and do not show it again. The options: approve, request changes (`change`
   with the area and the user's words), or stop. `continue` is not an approval.
@@ -417,7 +431,10 @@ Without the tool, or when the question goes unanswered, stop.
   decides: accept it, have it changed (the area it belongs to and the user's
   words), or stop. For `ESCALATE` or `BLOCK`, ask for the answer the stage
   needs, and pass it with `continue --text`. An area in `details.unknown` is
-  one the rules do not name: say so.
+  one the rules do not name: say so. An `ESCALATE` that names the area of a
+  stage which runs after the blocked one comes to the user too, with every
+  other item of that handoff: the blocked stage cannot finish, and no later
+  stage runs before it. The answer runs the blocked stage again.
 - **`cap`:** a loop cap is reached. Say which, and what the route would do.
 - **`no_report`:** a stage returned twice without a usable handoff. Say what it
   returned.
@@ -430,17 +447,18 @@ Without the tool, or when the question goes unanswered, stop.
 - **`fast_path_edge`:** `Read` the lanes file and carry out its `Leave`.
 - **`scans_approval`:** the project file's scan commands are new to this user,
   or changed. List each one from `details.commands`, with what it checks where
-  you know the tool, and say that `ai_team` runs them before every review,
+  you know the tool, and say that `ai_team` runs them once per round, before its first review,
   without asking again, in any project with this exact list. Approving runs
-  them; a scan the user does not want is taken out of the project file.
+  them; a scan the user does not want is theirs to take out of the project
+  file, and the next run asks again with the shorter list.
 - **`open_defects`, `conflict_unowned`, `review_drift`, `blocked`:** say what
-  `summary` and `details` hold, and give the options.
+  `summary` and `details` hold, and give the options. A `blocked` whose summary
+  says that HEAD moved while a stage ran means a commit no stage may make:
+  show the user what `git log` there lists, and leave undoing it to them.
 - **A change request after the design is approved** is not routed: `decide
   change` refuses it, and its error says that the feature can run on to
   `READY_FOR_MERGE` or be stopped. Tell the user that and wait. The user's
   answer to a finding is not such a request.
-- **`stop`** returns which procedure to follow: the `Stop` of the feature's git
-  workflow.
 
 ### 5. Git workflow
 The procedure of the feature's workflow says how each step is done, and which
@@ -455,17 +473,16 @@ where a project's `Git Workflow` override replaces a procedure:
   `ai_team route-conflicts` routes it. Complete the merge as soon as the action
   is `complete_merge`, before any other stage runs.
 - **Deliver.** What you commit at delivery is exactly what the review audited:
-  `ai_team verify-delivery` checks it. A change after the review goes back to
-  the review (`ai_team review-again`).
-- **Stop.** The user can stop a feature at any point, also after interrupting
-  a stage that is still running. Never choose between a rollback and shelving
-  for the user. Show what would be lost (`ai_team stop-list`): it includes the
-  partial work of an interrupted stage and edits the user made by hand. A
-  rollback deletes all work on the feature, and nothing is deleted before the
-  user has confirmed that list. Shelving keeps the work, and a shelved feature
-  is `REJECTED`.
+  `ai_team verify-delivery` checks it, and `ai_team delivered` refuses
+  anything else. A change after the review goes back to the review
+  (`ai_team review-again`).
+- **Stop.** The user can stop a feature at any point, also after an
+  interrupted stage. The user chooses between rollback and shelving, and
+  confirms the list of `ai_team stop-list` before anything is deleted. A
+  shelved feature is `REJECTED`.
 - **Resume.** A resumed feature has `Design Gate` at `PENDING`: no build stage
-  runs without a new approval.
+  runs without a new approval. A fast-path feature has no design gate and
+  resumes at its build stage.
 
 ### 6. A step the user orders
 The workflow leaves the last steps to the user: committing a feature delivered

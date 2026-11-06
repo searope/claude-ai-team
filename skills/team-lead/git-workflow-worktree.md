@@ -41,19 +41,17 @@ Two facts are used throughout:
      worktree and give the same command there, or run the feature in place
      with `/team-lead in-place <request>`. Leave the second one out when the
      project file says `worktree only`.
-2. **Check the project file is there.** If the worktree has no project file,
-   the commit that installed it is not on the base branch yet. Stop and tell
-   the user to get that commit onto the base branch first. If its
-   `Worktree setup` line says `not decided`, stop as well: no stage can run a
-   tool in a worktree without it. Tell the user what the line has to say, and
-   that they write it into the project file.
-3. **Start from the current base.** `git rev-list --count <base>..HEAD` prints
+2. **Start from the current base.** `git rev-list --count <base>..HEAD` prints
    how many commits this worktree's branch has that the base lacks. If it is
    not `0`, the feature would be built on top of them and its review would not
    see them: show them with `git log --oneline <base>..HEAD`, ask the user
    whether to build on them, and stop on no. Then
    `git rev-list --count HEAD..<base>` prints how many base commits the
    worktree lacks. If it is not `0`, run `git merge <base>`.
+3. **Check `Worktree setup`.** If the project file's `Worktree setup` line
+   says `not decided`, stop: no stage can run a tool in a worktree without it.
+   Tell the user what the line has to say, and that they write it into the
+   project file.
 4. **Make the feature's branch:** `git switch -c agent/<feature-slug>`, unless
    `git branch --show-current` already prints that name.
 5. The feature's `Start Point` is `git rev-parse HEAD` now. Give it to
@@ -87,8 +85,9 @@ The messages are:
 
 Do this before each run of Testing (the action `update` says when), on
 `sync`, and at the start of a resume. Add `--dispatch` to the `ai_team`
-commands below only when the action `update` sent you here; on `sync` and on a
-resume, step 7 comes first, and then `ai_team next <slug> --dispatch`.
+commands below only when the action `update` sent you here. On `sync` and on a
+resume, run them without it, and after step 7 run
+`ai_team next <slug> --dispatch`.
 
 If a merge is already in progress, do not start again:
 `git rev-parse --verify --quiet MERGE_HEAD` prints a hash then. The conflicts
@@ -111,15 +110,16 @@ are with the stages they were routed to until each of those has reported
    routes each conflicting file to the stage that writes its area, with the
    direction `Resolve the merge conflict with <base> in <files>`, as a
    backward route that counts toward no cap, and blocks on the user for a file
-   that lies in no area. When an action is `complete_merge`, and before any
+   that lies in no area or in the area of a stage that is skipped. When an action is `complete_merge`, and before any
    other stage runs, complete the merge: stage the resolved files by name,
    check that `git diff --name-only --diff-filter=U` prints nothing, run
    `git commit --no-edit`, then `ai_team merged <slug> --dispatch`: the base
    commit that was merged becomes the `Start Point`.
 7. **On `sync` or on a resume, when Testing has already run:** if the merge
-   brought changes in, run `ai_team route-back <slug> --stage 7 --reason "the
-   base branch brought changes in" --dispatch`: a backward route to Testing
-   that counts toward no cap. If it brought nothing, say so and change nothing.
+   brought changes in and no conflict was routed, run `ai_team route-back
+   <slug> --stage 7 --reason "the base branch brought changes in"`: a backward
+   route to Testing that counts toward no cap. If it brought nothing, say so
+   and change nothing.
 
 ---
 

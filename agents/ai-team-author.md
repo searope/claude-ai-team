@@ -24,5 +24,6 @@ of your dispatch: they bind you. Then read the project file on its
 
 You cannot see the user's conversation and cannot ask questions. You have file
 tools and no shell. The AI team guard lets the file tools write only your
-stage's area and your handoff. A call it blocks is not retried in another
-form: say so in your handoff, and escalate where your work needs it.
+stage's area, your handoff and your scratch folder. A call it blocks is not
+retried in another form: say so in your handoff, and escalate where your work
+needs it.

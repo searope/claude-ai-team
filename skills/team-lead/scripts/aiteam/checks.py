@@ -16,8 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from . import model
 from .project import Project, Scan, read_text
 
-CALL_LIMIT = 600            # what the shell tool that runs ai_team.py allows for one call
-CALL_BUDGET = 540           # one call never runs scans past this many seconds in total
+CALL_BUDGET = 540           # one call runs scans for at most this long: 60 s under the shell tool's 600 s
 SCAN_TIMEOUT = 540          # seconds per scan, at most; less when the call's budget is nearly spent
 OUTPUT_LIMIT = 15000        # characters of a scan's output kept in the report
 NOT_FOUND = re.compile(r"not recognized as an internal or external command|command not found|"
@@ -265,7 +264,8 @@ def propose(root: str, project: Project) -> Dict[str, Any]:
 
     gates = {k: list(dict.fromkeys(v)) for k, v in gates.items() if v}
     md = ["## Scans", "",
-          "`ai_team.py` runs these before every review, from the feature's folder, and gives the reviewers "
+          "`ai_team.py` runs these once per round, before its first review, from the feature's folder, and "
+          "gives the reviewers "
           "their output. A scan fails on a non-zero exit code, or when its output matches the pattern after "
           "`fails when`.", ""]
     for s in scans:

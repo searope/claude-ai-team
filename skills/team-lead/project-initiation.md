@@ -122,12 +122,13 @@ trivial runs all the stages, each of them a model run of its own. Propose:
 >   files in `Source`, none in `Infra`, adds no dependency, changes no screen
 >   and no user-facing text, and leaves no decision to the user. It skips
 >   Discovery, Copy, UI/UX and Architecture, and with them the spec, the ADR
->   and the design gate. Coding, Testing and Security run.
+>   and the design gate. Coding, Testing and Security run, and the second
+>   review where the project turns it on.
 
 **Gates and scans.** Gates are commands that a stage runs and that must pass
 before it reports `DONE` (rules, section 6); the stage runs them and reports
-them. Scans are read-only checks that `ai_team` runs itself before every
-review, and whose report the reviewers must answer: they rest on the tool, not
+them. Scans are read-only checks that `ai_team` runs itself once per round,
+before its first review, and whose report the reviewers must answer: they rest on the tool, not
 on an agent's word. Run `ai_team propose-gates`: it detects the stack (Python
 first, with uv, Poetry or Pipenv when their lock file is there; .NET; Node;
 Rust; Go) and proposes both, such as `pytest`, `ruff`, `mypy`, `pip-audit`,

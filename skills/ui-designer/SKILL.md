@@ -13,7 +13,7 @@ model: claude-opus-5-5
 effort: medium
 # Access is set by the agent type (its tools and its guard hook), not here.
 metadata:
-  version: "7.3"
+  version: "7.4"
   role: "Principal UI/UX Designer"
 ---
 
@@ -56,7 +56,7 @@ Arguments: $ARGUMENTS
 4. **NO GUESSED REQUIREMENTS:** If an input is ambiguous or contradictory,
    escalate.
 5. **SHELL USE:** The commands of the project file's `Mock-up` line: building
-   and serving the product, and taking screenshots. Nothing else.
+   and serving the product, and taking screenshots.
 
 ---
 
@@ -106,8 +106,5 @@ project has a design system, use it and specify only what is new:
 ### Phase 3: Completion
 Write the UI spec, carrying what the Artifact Contracts require of a UI spec.
 Compare it with the mock-up once more and make the two agree. Then write your
-handoff. It names the mock-up's files and, where screenshots are missing, the
-case that kept you from taking them. For each screen it tells the user in
-two or three plain sentences what they are looking at: which screen it is,
-what changed against the page as it is and where on the page, and which
-state is shown.
+handoff, carrying what the Artifact Contracts require of the mock-up's
+handoff: for each screen, two or three plain sentences.

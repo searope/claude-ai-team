@@ -1,6 +1,6 @@
 # AI Team Pipeline: Rules for Every Agent
 
-**Pipeline Version:** 8.0
+**Pipeline Version:** 8.1
 
 Feature work runs through a pipeline of stages. Each stage is the work of one
 skill, carried out by an agent that the orchestrator dispatches. The
@@ -36,7 +36,8 @@ things in it:
   project (§2). Each path stands in backticks and is matched like a line of
   `.gitignore`: `src/` is a folder named `src` at any depth, `/src/` only the
   one at the root, `*.test.*` a file name anywhere. Words outside the
-  backticks are a comment for people.
+  backticks are a comment for people. A path that matches more than one of
+  the three areas is `Tests`, else `Infra`, else `Source`.
 - **Worktree setup:** what a worktree has besides the files git tracks, and
   how tools are run in it. A worktree is a fresh checkout: it has no
   environment, no settings file and no local data unless this line gives it
@@ -105,18 +106,25 @@ What a feature does is `Spec`. Its wording is `Copy`. Its look and layout are
 - An agent that finds a problem in another area does not fix it. It reports
   it (§5).
 - A guard holds these limits while a stage runs, and it is strict by default.
-  The file tools write only the files of the stage's area and its handoff. A
-  shell command writes only into the agent's scratch folder or those same
-  files, by whatever means; `git` and `gh` run only in their read-only forms,
-  plainly spelled, with no alias, variable or `-c` option; no file that holds
-  secrets is read, printed, copied, sourced or searched; `eval`, a shell fed
-  from a pipe, and in-place editors do not run. A call the guard blocks is not
-  retried in another form: the agent reports what its work needed, and
-  escalates where the work cannot be done without it (§5).
-- When a stage returns, the orchestrator compares every file the stage could
-  have changed with how it was before the stage ran, the working files under
-  `.ai-team/` and `.claude/` included, which git ignores. A change outside the
-  stage's area stops the feature for the user, who can have it put back.
+  The file tools write only the files of the stage's area, its handoff and the
+  agent's scratch folder; a shell command writes nowhere else, by whatever
+  means, and deletes in the project only what its own run generated (§3).
+  `git` and `gh` run only in their read-only forms, plainly spelled, with no
+  alias, variable or `-c` option; no file that holds secrets is read,
+  printed, copied, sourced or searched, and no agent reads the orchestrator's
+  state; `eval`, a shell fed from a pipe, a command whose name a variable
+  holds, inline code that runs a command or writes a file, a link or a
+  junction, and in-place editors do not run. A call the guard blocks is not
+  retried in another form, beyond the plain spelling its message asks for:
+  the agent reports what its work needed, and escalates where the work cannot
+  be done without it (§5). The guard reads commands as text and can miss a
+  form; the check below is what holds.
+- When an isolated stage that has file-writing tools returns, the
+  orchestrator compares every file the stage could have changed with how it
+  was before the stage ran, the working files under `.ai-team/` and
+  `.claude/` included, which git ignores, and checks that no commit was made.
+  A change outside the stage's area stops the feature for the user, who can
+  have it put back.
 - Only the orchestrator dispatches agents. An agent invokes no skill.
 - Only the orchestrator runs git commands that change the repository. No
   agent commits, pushes, merges, stashes or resets. A merge conflict in a file
@@ -344,7 +352,7 @@ Project: <path of the project file>
 Inputs: <paths of the feature's artifacts this stage builds on and of the notes for it, or `none`>
 Handoff: <path of the handoff file to write>
 Defects:
-- <area>: <one line> (<handoff file that describes it>)
+- <area>: <one line> (<the handoff file that describes it, or `the user` when none does>)
 Fast Path: <the request>
 Files: <paths that may change>
 ```
@@ -368,7 +376,9 @@ Files: <paths that may change>
   and numbers stay as they are, and `Revision`, where the artifact has one,
   goes up by one.
 - `Defects` are the items routed to the stage. Read the handoff file each one
-  cites, and resolve it. They come on top of the stage's work, not in place
+  cites, and resolve it. An item that cites `the user` has no file, such as a
+  change the user asked for at a gate: its line and the direction are all
+  there is. They come on top of the stage's work, not in place
   of it: a stage that has not done its work for the feature yet does it in
   this run, and so does a stage whose direction says that something it builds
   on has changed. Work the stage has already done stays as it is, apart from
@@ -423,8 +433,15 @@ dispatch, or of another round, is stale.
 - `DONE` requires every gate that the project file sets for the stage to
   pass (§6). The agent runs those gates itself.
   - A gate the agent cannot run, because it has no shell or the command is
-    denied: `ESCALATE`, blocked on `user`. A review reports `BLOCK`, blocked
-    on `user`.
+    denied, or that fails for a reason that lies in no area, such as a
+    missing tool or a setting of the machine: `ESCALATE`, blocked on `user`.
+    A review reports `BLOCK`, blocked on `user`.
+  - A gate whose command the shell tool cuts off at its time limit has not
+    passed, and is not run again whole. The agent runs it in parts that each
+    stay under the limit and together cover the whole gate, by folder,
+    package or marker, or as the gate's own line splits it, and lists the
+    parts in its handoff. A gate that cannot be split so: `ESCALATE`,
+    blocked on `user`, naming the command and how long it ran.
   - A gate that fails only for a reason in another area, such as an existing
     test that pins behaviour the feature changes on purpose: `DEFECTS`,
     blocked on that area. The agent does not touch that area.
@@ -479,9 +496,10 @@ Overrides may cover:
   finished feature is delivered, and how one is rolled back, shelved and
   resumed.
 - **Fast Path** (the orchestrator): which changes are built without design
-  artifacts, and which stages they skip besides the ones that write those.
-  The orchestrator records the request and the files that may change, and
-  passes them in every dispatch (§5).
+  artifacts, and which stages they skip besides the ones that write those and
+  Infra, which builds only from an ADR: a fast path never takes a file in
+  `Infra`. The orchestrator records the request and the files that may
+  change, and passes them in every dispatch (§5).
 - **Trivial Lane** (the orchestrator): which changes are made directly in the
   user's conversation, and how they are made and delivered there. Such a
   change is no work of the pipeline: it has no stage and no dispatch, and

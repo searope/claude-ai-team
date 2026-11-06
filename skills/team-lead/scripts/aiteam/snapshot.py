@@ -20,13 +20,13 @@ import shutil
 from typing import Any, Dict, List, Optional
 
 from . import gitio, model
-from .guard import is_allowed
+from .guard import is_allowed, is_secret_path
 from .project import to_posix
 
 COPY_LIMIT = 5 * 1024 * 1024
 EXTRA_ROOTS = (".ai-team", ".claude", ".git/hooks", ".git/info")
 EXTRA_FILES = (".git/config", ".git/HEAD")
-EXTRA_SKIP = (".ai-team/snapshots", ".claude/worktrees", ".git/hooks/_sample")
+EXTRA_SKIP = (".ai-team/snapshots", ".claude/worktrees")
 LOCK_FILES = {"package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "packages.lock.json",
               "poetry.lock", "uv.lock", "Pipfile.lock", "Cargo.lock", "go.sum", "composer.lock", "Gemfile.lock"}
 SETTINGS_LOCAL = ".claude/settings.local.json"
@@ -81,6 +81,8 @@ def _skip(rel: str, slug: str) -> bool:
         return True
     if rel.startswith(f"{model.SCRATCH_DIR}/{slug}-scan-") and rel.endswith(".txt"):
         return True
+    if rel.startswith(".git/hooks/") and rel.endswith(".sample"):
+        return True  # git's own examples, which never run
     return rel.endswith(".tmp") and rel.startswith(f"{model.STATE_DIR}/")
 
 
@@ -121,9 +123,12 @@ def take(root: str, slug: str, number: int, seq: int) -> str:
         shutil.rmtree(_long(folder), ignore_errors=True)
     os.makedirs(_long(os.path.join(folder, "f")), exist_ok=True)
     state = _state(root, slug)
+    # No copy of a file git ignores one by one (build output, caches: many, and no stage's work) or of a
+    # file that holds secrets: such a file is checked by its hash, and is put back by hand if need be.
+    ignored = {p for xy, p, _ in gitio.status_entries(root, ignored=True) if xy == "!!"}
     copies: Dict[str, str] = {}
     for index, (rel, sha) in enumerate(state.items()):
-        if sha in (None, UNREADABLE):
+        if sha in (None, UNREADABLE) or rel in ignored or is_secret_path(rel):
             continue
         src = _abs(root, rel)
         try:
@@ -183,7 +188,8 @@ def violations(root: str, manifest: Dict[str, Any], allow: Dict[str, List[str]],
     """Changes outside the stage's area, and changes to report without blaming the stage."""
     found: List[Dict[str, Any]] = []
     notes: List[Dict[str, Any]] = []
-    build_stage = int(manifest.get("stage", 0)) in (5, 6, 7)
+    st = model.stage(int(manifest.get("stage", 1)))
+    build_stage = bool(st.writes) and not st.design  # Source, Infra and Tests: where packages get installed
     for item in changes(root, manifest):
         rel = item["path"]
         if is_allowed(allow, rel):

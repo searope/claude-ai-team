@@ -15,6 +15,7 @@
             "shell": "powershell",
             "command": "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/team-scope.ps1\"",
             "timeout": 15,
+            "onFailure": "block",
             "statusMessage": "Checking AI team scope"
           }
         ]

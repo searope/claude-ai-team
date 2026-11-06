@@ -106,5 +106,6 @@ drop that stash and run `ai_team purge <slug> --confirm`.
    shelved, tell the user which commit and file conflict, and stop.
 3. Run `ai_team set <slug> --shelved-stash none --start-point <the hash git
    rev-parse HEAD prints> --gate-status IN_PROGRESS --history "Resumed"`.
-   `Design Gate` stays `PENDING`, and a new round starts. Go on with the action
-   it returns, as section 3 of the skill says.
+   `Design Gate` stays `PENDING`, and a new round starts. Then run
+   `ai_team next <slug> --dispatch`, and go on with the action it returns, as
+   section 3 of the skill says.

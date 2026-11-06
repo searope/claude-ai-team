@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -68,7 +67,6 @@ def new_ledger(slug: str, request: str, workflow: str, base: Optional[str], star
         "reviewed_change_record": None,
         "delivered_commit": None,
         "review_again_streak": 0,
-        "imported_round": None,
         "notices": [],
         "history": [],
     }
@@ -182,94 +180,3 @@ def render_markdown(led: Ledger) -> str:
     lines += ["", "## History"]
     lines += [f"- {h}" for h in led.get("history", [])] or ["- none"]
     return "\n".join(lines) + "\n"
-
-
-# Import of a ledger written by team-lead 10.x (pipeline 7.x) -----------------------------------
-
-def import_markdown(text: str, slug: str) -> Ledger:
-    def field(name: str) -> str:
-        m = re.search(rf"^\s*-\s+\*\*{re.escape(name)}:\*\*\s*(.*)$", text, re.MULTILINE)
-        return m.group(1).strip() if m else ""
-
-    wf_raw = field("Workflow")
-    base = None
-    kind = "in-place"
-    if wf_raw.lower().startswith("worktree"):
-        kind = "worktree"
-        m = re.search(r"base\s+`?([^`\s]+)`?", wf_raw)
-        base = m.group(1) if m else None
-    led = new_ledger(slug, "", kind, base, field("Start Point").strip("`") or "")
-    def word(value: str) -> str:
-        parts = value.replace("`", " ").replace("*", " ").split()
-        return parts[0].upper() if parts else ""
-
-    gate = word(field("Gate Status"))
-    led["gate_status"] = gate if gate in model.GATE_STATUSES else "IN_PROGRESS"
-    rnd = re.search(r"\d+", field("Round"))
-    led["round"] = int(rnd.group()) if rnd else 0
-    routes = field("Backward Routes")
-    for key in ("tests", "security", "escalations"):
-        m = re.search(rf"{key}\s+(\d+)", routes)
-        if m:
-            led["counters"][key] = int(m.group(1))
-    dg = field("Design Gate")
-    if "fast path" in dg.lower():
-        led["design_gate"] = model.FAST_PATH_GATE
-    else:  # anything but a clear APPROVED opens the gate again, which is the safe side
-        led["design_gate"] = "APPROVED" if word(dg) == "APPROVED" else "PENDING"
-    mg = word(field("Mock-up Gate"))
-    led["mockup_gate"] = mg if mg in ("PENDING", "APPROVED", "SKIPPED") else None
-    ad = field("Approved Design")
-    m_spec, m_adr = re.search(r"spec\s*r(\d+)", ad, re.I), re.search(r"ADR\s*r(\d+)", ad, re.I)
-    if m_spec or m_adr:
-        led["approved_design"] = {"spec": int(m_spec.group(1)) if m_spec else None,
-                                  "adr": int(m_adr.group(1)) if m_adr else None}
-    stash = field("Shelved Stash").strip("`")
-    led["shelved_stash"] = None if stash in ("", "none") else stash
-    for st in model.STAGES:
-        label = model.LEGACY_LABELS.get(st.number, st.label)
-        m = re.search(rf"^\|\s*\**{re.escape(label)}\**\s*\|\s*([A-Z_]+)", text, re.MULTILINE)
-        if m and m.group(1) in ("PENDING", "DONE", "SKIPPED"):
-            rec = stage_rec(led, st.number)
-            rec["status"] = m.group(1)
-            if m.group(1) == "DONE":
-                rec["done_seq"] = 0
-                rec["done_round"] = led["round"]
-            if m.group(1) == "SKIPPED":
-                rec["skip_reason"] = "fast path" if "fast path" in field("Design Gate").lower() else "condition"
-    section = re.search(r"^##\s+Fast Path\s*$(?P<body>.*?)(?=^##\s|\Z)", text, re.MULTILINE | re.DOTALL)
-    if section and section.group("body").strip():
-        body = section.group("body").strip()
-        files = re.findall(r"`([^`]+)`", body)
-        led["fast_path"] = {"request": body.splitlines()[0].lstrip("- ").strip(), "files": files}
-        led["lane"] = "fast"
-    hist = re.search(r"^##\s+History\s*$(?P<body>.*?)(?=^##\s|\Z)", text, re.MULTILINE | re.DOTALL)
-    if hist:
-        led["history"] = [ln.strip()[2:].strip() for ln in hist.group("body").splitlines()
-                          if ln.strip().startswith("- ")]
-        if led["history"]:
-            first = led["history"][0]
-            m = re.search(r"request:\s*(.+)$", first)
-            led["request"] = (m.group(1) if m else first).strip()
-            led["request_short"] = led["request"]
-    defects = re.search(r"^##\s+Active Defects\s*$(?P<body>.*?)(?=^##\s|\Z)", text, re.MULTILINE | re.DOTALL)
-    if defects:
-        for ln in defects.group("body").splitlines():
-            m = re.match(r"^\s*-\s+(\w+)\s*->\s*([^()]+?)\s*\(([^)]*)\):\s*(.*?)(?:\s*\(([^()]*)\))?\s*$", ln)
-            if not m:
-                continue
-            area = model.normalize_area(m.group(2)) or "user"
-            owner = model.AREA_OWNER.get(area)
-            led["active_defects"].append({
-                "id": len(led["active_defects"]) + 1, "kind": m.group(1), "area": area,
-                "owner": owner, "route_to": owner, "line": m.group(4), "handoff": m.group(5),
-                "seq": 0, "user": area == "user"})
-    led["imported_round"] = led["round"]
-    # 7.x routed every handoff of this round already: its items are in Active Defects or
-    # were answered (History). Routing them again would block or duplicate them.
-    for st in model.STAGES:
-        rel = model.handoff_path(slug, st.number)
-        if rel:
-            led["routed"].append(f"{rel}@r{led['round']}")
-    history(led, f"Imported from the 7.x markdown ledger; pipeline {model.PIPELINE_VERSION} from here on")
-    return led

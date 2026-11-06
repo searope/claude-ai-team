@@ -133,8 +133,6 @@ class Handoff:
     blocked_on: List[str] = field(default_factory=list)
     blocked_on_raw: str = ""
     reason: str = ""
-    files_touched: str = ""
-    header: str = ""
     has_for_later: bool = False
     remarks: str = ""
     mtime: float = 0.0
@@ -146,6 +144,7 @@ class Handoff:
 
 
 _HFIELD = re.compile(r"^\s*(?:[-*+]\s+)?\*\*(?P<name>[^*:]+):?\*\*:?\s*(?P<value>.*)$")
+_HFIELD_NAMES = ("status", "round", "blocked on", "reason", "files touched")
 
 
 def split_areas(raw: str) -> List[str]:
@@ -175,22 +174,22 @@ def parse_handoff(root: str, rel: str) -> Handoff:
     for idx, line in enumerate(lines):
         if re.match(r"^#{1,3}\s+Handoff\b", line.strip(), re.IGNORECASE):
             start = idx
-            h.header = line.strip()
             break
     if start is None:
         return h
     end = start + 1
+    blank_seen = False
     for idx in range(start + 1, len(lines)):
         line = lines[idx]
+        if not line.strip():
+            blank_seen = True  # a blank line between the fields does not end the block
+            continue
         m = _HFIELD.match(line)
-        if not m:
-            if line.strip() == "" and idx == start + 1:
-                end = idx + 1
-                continue
-            end = idx
+        name = m.group("name").strip().lower() if m else ""
+        if not m or (blank_seen and name not in _HFIELD_NAMES):
+            end = idx  # after a blank line, only a field of the block continues it
             break
         end = idx + 1
-        name = m.group("name").strip().lower()
         value = m.group("value").strip()
         if name == "status":
             word = re.match(r"([A-Za-z_]+)", value.strip("`*_ "))
@@ -203,20 +202,10 @@ def parse_handoff(root: str, rel: str) -> Handoff:
             h.blocked_on = split_areas(value)
         elif name == "reason":
             h.reason = value
-        elif name == "files touched":
-            h.files_touched = value
     rest = "\n".join(lines[end:]).strip()
     h.has_for_later = bool(re.search(r"^#{2,4}\s+For Later Stages\s*$", text, re.MULTILINE | re.IGNORECASE))
     h.remarks = rest
     return h
-
-
-def handoff_block_of(message: str) -> Optional[str]:
-    """The message itself when it starts with a handoff block, else None."""
-    stripped = message.lstrip("﻿ \n\r\t")
-    if re.match(r"^#{1,3}\s+Handoff\b", stripped, re.IGNORECASE):
-        return stripped
-    return None
 
 
 # Mock-ups -----------------------------------------------------------------------------------

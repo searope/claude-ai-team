@@ -48,14 +48,14 @@ def branch_exists(root: str, name: str) -> bool:
     return bool(text(root, "branch", "--list", name, check=False).strip())
 
 
-def in_worktree(root: str) -> bool:
-    git_dir = text(root, "rev-parse", "--absolute-git-dir", check=False).strip()
-    common = text(root, "rev-parse", "--git-common-dir", check=False).strip()
-    if not git_dir or not common:
-        return False
-    if not os.path.isabs(common):
-        common = os.path.join(root, common)
-    return os.path.normcase(os.path.realpath(git_dir)) != os.path.normcase(os.path.realpath(common))
+def current_branch(root: str) -> str:
+    return text(root, "branch", "--show-current", check=False).strip()
+
+
+def _nul_list(root: str, *args: str, check: bool = True) -> List[str]:
+    """Paths of a `-z` listing, exactly as git names them (no C-quoting)."""
+    out = _git(root, args[0], "-z", *args[1:], check=check)[1]
+    return [p.decode("utf-8", "replace") for p in out.split(b"\0") if p]
 
 
 def status_porcelain(root: str) -> str:
@@ -107,13 +107,11 @@ def changed_paths(root: str, ignored: bool = False) -> List[str]:
 
 
 def diff_names(root: str, start_point: str) -> List[str]:
-    out = text(root, "diff", "--name-only", start_point)
-    return [line for line in out.splitlines() if line.strip()]
+    return _nul_list(root, "diff", "--name-only", start_point)
 
 
 def unmerged_files(root: str) -> List[str]:
-    out = text(root, "diff", "--name-only", "--diff-filter=U", check=False)
-    return [line for line in out.splitlines() if line.strip()]
+    return _nul_list(root, "diff", "--name-only", "--diff-filter=U", check=False)
 
 
 def show_file(root: str, rev: str, path: str) -> Optional[bytes]:
@@ -127,8 +125,7 @@ def log_oneline(root: str, rev_range: str) -> List[str]:
 
 
 def untracked(root: str) -> List[str]:
-    out = text(root, "ls-files", "--others", "--exclude-standard", check=False)
-    return [line for line in out.splitlines() if line.strip()]
+    return _nul_list(root, "ls-files", "--others", "--exclude-standard", check=False)
 
 
 def is_ancestor(root: str, ancestor: str, descendant: str = "HEAD") -> bool:

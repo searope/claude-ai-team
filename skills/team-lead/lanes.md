@@ -31,7 +31,9 @@ branch and no ledger.
    in `Source` and `Infra` that the change would touch, with `Read`, `Glob`
    and `Grep`, and name each one. Name no test file: tests are written in
    their own area. On a fast path these files stand in for the Allowed Blast
-   Radius. A request whose files you cannot name runs in full.
+   Radius. A request whose files you cannot name runs in full, and so does
+   one that touches a file in `Infra`: a fast path does not run Infra, which
+   builds only from an ADR, and `ai_team` refuses such a file.
 3. **The lightest lane that fits.** Hold the request and its files against
    the conditions of the trivial lane, then against those of the fast path.
    The request takes the first lane whose conditions all hold, and runs in
@@ -62,7 +64,7 @@ branch and no ledger.
    feature, give the same to `ai_team new` as `--lane-reason`, which writes it
    into `History`. On a fast path, `ai_team new` also takes `--lane fast`, the
    files of step 2 as `--files`, and the stages the project's rule skips
-   besides the design stages as `--skip-stages`.
+   besides the design stages and Infra as `--skip-stages`.
 
 A feature, on the fast path or in full, goes on with the next step of
 `Start a new feature`.
@@ -101,8 +103,8 @@ the area of a stage that the fast path skips. There is no stage to route
 that to: `ai_team` sets `BLOCKED`, notes the edge in `History`, and its action
 is `ask_user` with the kind `fast_path_edge`. Then:
 - **One more file.** The stage needs a file that `Files` does not name. Hold
-  the request against the conditions again, with that file added. If they
-  all hold, run `ai_team fast-path <slug> add-file --path <file> --dispatch`
+  the request against the conditions again, with that file added; a file in
+  `Infra` never fits. If they all hold, run `ai_team fast-path <slug> add-file --path <file> --dispatch`
   without asking: it adds the file, closes the item, and runs the blocked
   stage again (`Round` goes up, no other stage is reset, nothing counts
   toward a cap).

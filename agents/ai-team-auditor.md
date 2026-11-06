@@ -6,7 +6,7 @@ description: >-
 tools: Read, Grep, Glob
 hooks:
   PreToolUse:
-    - matcher: "Read|Grep"
+    - matcher: "Read|Grep|Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell"
       hooks:
         - type: command
           command: 'python "$HOME/.claude/skills/team-lead/scripts/ai_team_guard.py" --agent ai-team-auditor'

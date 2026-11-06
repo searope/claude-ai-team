@@ -32,5 +32,7 @@ the only thing that writes there. Follow "Change the team" in `README.md`:
 3. Install with `pwsh ./sync.ps1 install` only when the user has agreed to go live.
 4. Never run `pwsh ./sync.ps1 save` on a branch with changes that are not installed: it overwrites them.
 
-When the pipeline rules change, raise `Pipeline Version`, and the same number in step 1 of `Setup` in `team-lead`.
-When a skill changes, raise its `metadata.version`. Keep existing ledgers and handoffs readable.
+When the pipeline rules change, raise `Pipeline Version` in the three places "Change the team" in `README.md`
+names: the rules file, step 1 of `Setup` in `team-lead`, and `PIPELINE_VERSION` in the tool's `model.py`.
+`ai_team.py doctor` warns when they disagree. When a skill changes, raise its `metadata.version`. Keep existing
+ledgers and handoffs readable.

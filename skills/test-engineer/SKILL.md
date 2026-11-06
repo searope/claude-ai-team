@@ -13,7 +13,7 @@ model: claude-opus-5-5
 effort: medium
 # Access is set by the agent type (its tools and its guard hook), not here.
 metadata:
-  version: "8.4"
+  version: "8.5"
   role: "Adversarial Test Engineer"
 ---
 
@@ -57,8 +57,10 @@ Arguments: $ARGUMENTS
 
 ### Phase 1: Traceability Mapping
 Map every Acceptance Criterion, every Invariant and every UI state to an
-explicit AAA (Arrange-Act-Assert) test case. A statement that the Artifact
-Contracts leave to the review gets no test: map it to the review.
+explicit AAA (Arrange-Act-Assert) test case, and, where the project's tests
+can open a page, the layout of each screen at each width the UI spec designs
+for. A statement that the Artifact Contracts leave to the review gets no test:
+map it to the review.
 
 ### Phase 2: Authoring & Execution
 Write parameterized tests verifying boundaries (0, null, MAX), malformed inputs,
@@ -70,7 +72,8 @@ write no test for what it leaves alone. Execute the test runners.
 
 ### Phase 3: Completion
 Write your handoff. After the handoff block, add the matrix mapping each
-Acceptance Criterion and Invariant to its tests, or to the review.
+Acceptance Criterion and Invariant to its tests, or to the review, and name
+each designed width that no test opens.
 
 - `DONE` requires every test to pass and every Acceptance Criterion and
   Invariant to be mapped.

@@ -4,13 +4,17 @@ The guard is a seat belt, not a sandbox: an agent is told not to work around it,
 and the per-stage snapshot (snapshot.py) finds what it changed anyway. Within that
 limit it is strict by default:
 
-- the file tools write only the dispatched stage's allowlist;
+- the file tools write only the dispatched stage's allowlist and the scratch folder;
 - a shell command may write only into a temp folder or that allowlist, through
-  any writer the guard can see (redirection, cp/mv/tee/curl -o, Out-File, ...);
+  any writer the guard can see (redirection, cp/mv/tee/curl -o, Out-File, ...),
+  and may delete an untracked file that the stage's own run made;
 - git and gh run only in their known read-only forms; everything else is denied,
-  aliases, variables and `-c` tricks included;
-- files that hold secrets are not read, printed, copied, sourced or searched;
-- shells fed from a pipe or a here-string, `eval`, and in-place editors are denied.
+  aliases, variables and `-c` tricks included, also inside `$(...)` and backticks;
+- files that hold secrets are not read, printed, copied, sourced or searched, and
+  the pipeline's state and snapshots are not read;
+- shells fed from a pipe, a here-string or a process substitution, `eval` and
+  `Invoke-Expression`, a command name held in a variable, inline code that runs
+  git or writes files, links and junctions, and in-place editors are denied.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from .project import PathPattern, norm_key, to_posix
 
 ACTIVE_MAX_AGE = 72 * 3600
 FORBIDDEN_PREFIXES = (".git/", ".claude/", ".ai-team/state/", ".ai-team/snapshots/")
+UNREADABLE_PREFIXES = (".ai-team/state/", ".ai-team/snapshots/")  # the orchestrator's: no agent reads them
 
 # --- allowlists ----------------------------------------------------------------------------------
 
@@ -179,7 +184,8 @@ _SECRET_NAME = (r"(?:\.env(?:\.[\w.-]+)?|[\w.-]*\.(?:pem|key|pfx|p12|kdbx|jks|ke
                 r"id_(?:rsa|dsa|ecdsa|ed25519)|secrets?\.(?:json|ya?ml|toml)|[\w.-]*\.secrets?\.[\w]+|"
                 r"credentials(?:\.json)?|\.npmrc|\.pypirc|\.netrc|\.git-credentials|"
                 r"appsettings\.(?:development|local|secrets)\.json|local\.settings\.json|"
-                r"terraform\.tfvars|\.htpasswd)")
+                r"terraform\.tfvars|[\w.-]*\.auto\.tfvars|\.htpasswd|"
+                r"gh/hosts\.yml|\.docker/config\.json|\.kube/config|\.azure/(?:accessTokens|msal_token_cache)\.\w+)")
 _SECRET = re.compile(rf"(?:^|/){_SECRET_NAME}$", re.IGNORECASE)
 _NOT_SECRET = re.compile(r"\.env\.(?:example|sample|template|dist|defaults|schema)$|(?:^|/)public\.pem$",
                          re.IGNORECASE)
@@ -198,16 +204,11 @@ def secret_names_in(text: str) -> List[str]:
     return [f for f in found if not _NOT_SECRET.search(f)]
 
 
-_READERS = {"cat", "type", "more", "less", "head", "tail", "nl", "bat", "gc", "get-content",
-            "select-string", "sls", "findstr", "grep", "rg", "ag", "ack", "awk", "sed", "strings", "xxd",
-            "od", "hexdump", "base64", "cp", "copy", "copy-item", "cpi", "mv", "move", "move-item", "mi",
-            "scp", "rsync", "certutil", "openssl", "sort", "uniq", "cut", "jq", "yq", "curl", "wget",
-            "invoke-webrequest", "iwr", "tar", "zip", "7z", "compress-archive", "source", ".", "python",
-            "python3", "py", "node", "ruby", "perl", "php", "dotnet", "pwsh", "powershell", "bash", "sh",
-            "zsh", "cmd", "git", "gh", "xargs", "eval", "tee", "diff", "cmp", "import-csv", "ipcsv",
-            "get-item", "gi", "resolve-path", "export-csv", "out-file", "set-content", "add-content",
-            "dd", "install", "ln", "sqlite3", "psql", "mysql", "docker", "kubectl", "az", "aws", "gcloud",
-            "env", "printenv"}
+# Commands that name a file without reading what it holds. Any other command that names a file
+# holding secrets is denied: the list of commands that can read a file has no end.
+_LISTERS = {"ls", "dir", "test", "[", "stat", "file", "wc", "du", "echo", "printf", "find", "test-path",
+            "get-childitem", "gci", "get-item", "gi", "get-filehash", "write-output", "write-host"}
+_FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete"}
 
 # --- shell parsing -------------------------------------------------------------------------------
 #
@@ -269,9 +270,32 @@ def _lex(line: str, shell: str) -> List[str]:
     return tokens if shell == "Bash" else [_unquote(t) for t in tokens]
 
 
-def _segments(command: str, shell: str) -> List[List[str]]:
+def _substitutions(text: str, shell: str) -> List[str]:
+    """The scripts inside `$(...)`, and in Bash inside backticks: they run, even within double quotes."""
+    text = re.sub(r"'[^'\n]*'", "''", text)  # single quotes hold literal text
+    spans: List[str] = []
+    i = text.find("$(")
+    while i >= 0:
+        depth, j = 0, i + 1
+        while j < len(text):
+            if text[j] == "(":
+                depth += 1
+            elif text[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        spans.append(text[i + 2:j])
+        i = text.find("$(", j)
+    if shell == "Bash":
+        spans += re.findall(r"`([^`]*)`", text)
+    return [s for s in spans if s.strip()]
+
+
+def _segments(command: str, shell: str, depth: int = 0) -> List[List[str]]:
     segments: List[List[str]] = []
-    for line in _strip_bodies(command).splitlines():
+    text = _strip_bodies(command)
+    for line in text.splitlines():
         current: List[str] = []
         for tok in _lex(line, shell):
             if tok in _SEPARATORS:
@@ -282,6 +306,9 @@ def _segments(command: str, shell: str) -> List[List[str]]:
                 current.append(tok)
         if current:
             segments.append(current)
+    if depth < 2:
+        for span in _substitutions(text, shell):
+            segments += _segments(span, shell, depth + 1)
     return segments
 
 
@@ -318,8 +345,8 @@ def _unwrap(segment: List[str]) -> Tuple[List[str], List[str]]:
                 seg.pop(0)
             seg.append("$XARGS_INPUT")  # whatever the pipe feeds in
             continue
-        if name == "find" and "-exec" in seg:
-            seg = seg[seg.index("-exec") + 1:]
+        if name == "find" and _FIND_ACTIONS & set(seg) - {"-delete"}:
+            seg = seg[min(seg.index(a) for a in _FIND_ACTIONS - {"-delete"} if a in seg) + 1:]
             continue
         break
     return assigns, seg
@@ -350,30 +377,106 @@ def _nested(segment: List[str]) -> List[Tuple[str, str]]:
     return found
 
 
-def _unseen_script(segment: List[str], command_text: str) -> Optional[str]:
-    """A shell that runs text the guard cannot read: eval, `| sh`, `sh <<< ...`, encoded commands."""
+_STDIN_DEVICE = re.compile(r"^/(?:dev/(?:stdin|fd/\d+|tty)|proc/(?:self|\d+)/fd/\d+)$")
+
+
+def _unseen_script(segment: List[str], command_text: str, shell: str = "Bash") -> Optional[str]:
+    """Text the guard cannot read: eval, `| sh`, `sh <<< ...`, `<(...)`, encoded commands, a variable as a command."""
     _, seg = _unwrap(segment)
     if not seg:
         return None
+    if shell == "Bash" and seg[0].startswith("$"):
+        return f"{seg[0]} (a command name held in a variable)"
     name = _cmd_name(seg[0])
-    if name == "eval":
-        return "eval"
+    if name in ("eval", "invoke-expression", "iex"):
+        return name
+    if name in ("alias", "set-alias", "sal", "new-alias", "nal"):
+        return name
+    if name in ("source", ".") and any("<(" in a for a in seg[1:]):
+        return f"{name} <("
     if name in _SHELLS:
         lowered = [a.lower() for a in seg[1:]]
-        if any(a in ("-encodedcommand", "-e", "-ec", "-enc") for a in lowered):
+        if name in ("pwsh", "powershell") and any(a in ("-encodedcommand", "-e", "-ec", "-enc") for a in lowered):
             return f"{name} -EncodedCommand"
-        inline = any(a in ("-c", "-command", "/c", "/k", "-commandwithargs", "-cwa") for a in lowered)
-        args = [a for a in seg[1:] if not a.startswith(("-", "/"))]
-        if not inline and not args:
+        inline_at = [k for k, a in enumerate(lowered)
+                     if a in ("-c", "-command", "/c", "/k", "-commandwithargs", "-cwa")
+                     or (name not in ("pwsh", "powershell", "cmd") and re.match(r"^-[a-z]*c$", a))]
+        if inline_at and lowered[inline_at[0] + 1:inline_at[0] + 2] == ["-"]:
             return f"{name} reading a script from its input"
-        if "<<<" in command_text and not inline:
+        if not inline_at and any("<(" in a for a in seg[1:]):
+            return f"{name} <("
+        strip = ("-", "/") if name == "cmd" else ("-",)
+        args = [a for a in seg[1:] if not a.startswith(strip) and not _STDIN_DEVICE.match(a)]
+        if not inline_at and not args:
+            return f"{name} reading a script from its input"
+        if "<<<" in command_text and not inline_at:
             return f"{name} <<<"
+    return None
+
+
+def _ps_call_on_variable(text: str) -> Optional[str]:
+    """PowerShell's call or dot-source operator on a variable: `& $g push`, `. $script`."""
+    m = re.search(r"(?:^|[\s;|({])[&.]\s*[\"']?\$(?!env:)", text, re.IGNORECASE | re.MULTILINE)
+    return m.group(0).strip() if m else None
+
+
+# Interpreters' inline code, and what in it runs a command or writes a file.
+_INLINE_FLAGS = {"python": {"-c"}, "python3": {"-c"}, "py": {"-c"}, "node": {"-e", "-p", "--eval", "--print"},
+                 "ruby": {"-e"}, "perl": {"-e", "-E"}, "php": {"-r"}, "bun": {"-e", "--eval"}, "deno": {"eval"}}
+_CODE_RISK = re.compile(
+    r"\b(?:subprocess|os\s*\.\s*(?:system|popen|exec\w*|spawn\w*|remove|unlink|rename|replace|rmdir|makedirs|"
+    r"mkdir|symlink|link)|child_process|exec(?:Sync|File\w*)?\s*\(|spawn(?:Sync)?\s*\(|system\s*\(|popen\s*\(|"
+    r"shutil|write_text|write_bytes|writeFile\w*|appendFile\w*|"
+    r"fs\s*\.\s*(?:write|append|copy|rename|unlink|rm|mkdir|symlink|link|truncate|create)\w*|"
+    r"open\s*\([^)]*['\"][rbt+]*[wax][rbt+]*['\"]|git\b|gh\b)")
+
+
+def inline_code_risk(command: str, shell: str = "Bash", depth: int = 0) -> Optional[str]:
+    """Inline code (python -c, node -e, ...) that runs a command or writes a file."""
+    for segment in _segments(command, shell):
+        _, seg = _unwrap(segment)
+        if seg:
+            flags = _INLINE_FLAGS.get(_cmd_name(seg[0]), set())
+            for k, a in enumerate(seg[1:-1], start=1):
+                if a in flags:
+                    m = _CODE_RISK.search(seg[k + 1])
+                    if m:
+                        return f"{_cmd_name(seg[0])} {a} with `{m.group(0)}`"
+        if depth < 3:
+            for inner_shell, script in _nested(segment):
+                found = inline_code_risk(script, inner_shell, depth + 1)
+                if found:
+                    return found
+    return None
+
+
+def makes_link(command: str, shell: str = "Bash", depth: int = 0) -> Optional[str]:
+    """A command that makes a link or a junction: removing a worktree can delete through one."""
+    for segment in _segments(command, shell):
+        _, seg = _unwrap(segment)
+        if seg:
+            name = _cmd_name(seg[0])
+            rest = [a.lower() for a in seg[1:]]
+            if name in ("ln", "mklink", "link"):
+                return name
+            if name == "cp" and shell == "Bash" and any(
+                    a in ("--link", "--symbolic-link") or re.match(r"^-[a-z]*[ls][a-z]*$", a) for a in rest):
+                return "cp making a link"
+            if name == "fsutil" and rest[:1] in (["hardlink"], ["reparsepoint"]):
+                return f"fsutil {rest[0]}"
+            if name in ("new-item", "ni") and any(a in ("junction", "symboliclink", "hardlink") for a in rest):
+                return "New-Item making a link"
+        if depth < 3:
+            for inner_shell, script in _nested(segment):
+                found = makes_link(script, inner_shell, depth + 1)
+                if found:
+                    return found
     return None
 
 
 # --- git and gh: allowlists of read-only forms -----------------------------------------------------
 
-_GIT_GLOBAL_WITH_ARG = {"-C", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"}
+_GIT_GLOBAL_WITH_ARG = {"-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix"}
 _GIT_READ_ONLY = {
     "status", "log", "diff", "show", "rev-parse", "rev-list", "merge-base", "ls-files", "ls-tree", "blame",
     "grep", "describe", "name-rev", "shortlog", "check-ignore", "check-attr", "var", "version", "help",
@@ -402,8 +505,9 @@ def _git_read_only(sub: str, args: List[str]) -> bool:
                   "--no-track"}
         if any(f.split("=", 1)[0] in writes for f in flags):
             return False
-        listing = {"--list", "-l", "-a", "--all", "-r", "--remotes", "--show-current", "-v", "-vv",
-                   "--contains", "--merged", "--no-merged", "--points-at", "--format", "--sort"}
+        # with a name, only these put branch in list mode; -v, --sort or --format with a name create it
+        listing = {"--list", "-l", "--show-current", "--contains", "--no-contains", "--merged", "--no-merged",
+                   "--points-at"}
         return not positional or any(f.split("=", 1)[0] in listing for f in flags)
     if sub == "tag":
         return not positional or any(f in ("-l", "--list") for f in flags)
@@ -424,7 +528,8 @@ def _git_read_only(sub: str, args: List[str]) -> bool:
     if sub == "submodule":
         return not positional or positional[0] in ("status", "summary")
     if sub == "symbolic-ref":
-        return "--short" in flags or len(positional) <= 1
+        return len(positional) <= 1 and all(f in ("-q", "--quiet", "--short", "--recurse", "--no-recurse")
+                                            for f in flags)
     if sub == "cat-file":
         return "-w" not in flags
     return True
@@ -446,6 +551,8 @@ def _git_problem(segment: List[str]) -> Optional[str]:
             opt = rest[j].split("=", 1)[0]
             if opt == "-c" or opt.startswith("--config-env"):
                 return "git -c"
+            if opt == "--exec-path" and "=" in rest[j]:
+                return "git --exec-path="
             j += 2 if (opt in _GIT_GLOBAL_WITH_ARG and "=" not in rest[j]) else 1
         rest = rest[j:]
         if not rest:
@@ -550,6 +657,24 @@ def git_mutation(command: str, shell: str = "Bash", depth: int = 0) -> Optional[
 _FILE_ARG_READERS = {"cat", "type", "gc", "get-content", "source", ".", "less", "more", "head", "tail"}
 
 
+def _without_env_files(segment: List[str]) -> List[str]:
+    """The segment less the value of an --env-file option: a tool that loads the file itself is allowed."""
+    out: List[str] = []
+    skip = False
+    for tok in segment:
+        if skip:
+            skip = False
+            continue
+        low = tok.lower()
+        if low in ("--env-file", "--envfile"):
+            skip = True
+            continue
+        if low.startswith(("--env-file=", "--envfile=")):
+            continue
+        out.append(tok)
+    return out
+
+
 def secret_read(command: str, shell: str = "Bash", depth: int = 0) -> Optional[str]:
     text = _strip_bodies(command)
     if re.search(r"\buser-secrets\s+list\b", text, re.IGNORECASE):
@@ -560,23 +685,25 @@ def secret_read(command: str, shell: str = "Bash", depth: int = 0) -> Optional[s
     if re.search(r"\[(?:System\.)?IO\.File\]::Read\w*\(", text, re.IGNORECASE) and secret_names_in(text):
         return secret_names_in(text)[0]
     for segment in _segments(command, shell):
-        _, seg = _unwrap(segment)
+        toks = _without_env_files(segment)
+        _, seg = _unwrap(toks)
         if not seg:
             continue
-        names = {_cmd_name(t) for t in seg}
-        if names & _READERS:
-            literal = [t for t in seg if is_secret_path(t.strip("<>\"'").split(":")[-1])]
-            if literal:
-                return literal[0]
-            hits = secret_names_in(" ".join(seg))
-            if hits:
-                return hits[0]
-            for t in seg[1:]:
-                bare = t.strip("\"'")
-                if bare.startswith(".") and _UNRESOLVABLE.search(bare):
-                    return f"{bare} (a hidden-file pattern the guard cannot resolve)"
-                if re.match(r"^\$\{?\w+\}?$", bare) and _cmd_name(seg[0]) in _FILE_ARG_READERS:
-                    return f"{bare} (a file name the guard cannot resolve)"
+        if _cmd_name(seg[0]) in _LISTERS and not _FIND_ACTIONS & set(toks):
+            continue  # names a file without reading it
+        literal = [t for t in toks if is_secret_path(t.strip("<>\"'").split(":")[-1])]
+        if literal:
+            return literal[0]
+        hits = secret_names_in(" ".join(toks))
+        if hits:
+            return hits[0]
+        for t in seg[1:]:
+            bare = to_posix(t.strip("\"'"))
+            base = bare.rsplit("/", 1)[-1]
+            if base.startswith(".") and _UNRESOLVABLE.search(base):
+                return f"{bare} (a hidden-file pattern the guard cannot resolve)"
+            if re.match(r"^\$\{?\w+\}?$", bare) and _cmd_name(seg[0]) in _FILE_ARG_READERS:
+                return f"{bare} (a file name the guard cannot resolve)"
         if depth < 3:
             for inner_shell, script in _nested(segment):
                 found = secret_read(script, inner_shell, depth + 1)
@@ -593,8 +720,14 @@ def secret_read(command: str, shell: str = "Bash", depth: int = 0) -> Optional[s
 _REDIRECT_OPS = {">", ">>", "&>", "&>>", ">|", "*>", "*>>", "2>", "2>>", "1>", "1>>"}
 _PS_PATH_PARAMS = {"-path", "-filepath", "-literalpath", "-destination", "-destinationpath", "-outfile",
                    "-pspath"}
-_PS_NO_VALUE = {"-force", "-recurse", "-append", "-nonewline", "-passthru", "-whatif", "-confirm", "-raw",
-                "-wait", "-notypeinformation", "-literal", "-usebasicparsing", "-skiphttperrorcheck"}
+# Parameters of the writing cmdlets that take a value; every other parameter is read as a switch, so that
+# an unknown switch never swallows the path after it.
+_PS_VALUE_PARAMS = {"-encoding", "-erroraction", "-ea", "-value", "-inputobject", "-width", "-delimiter",
+                    "-itemtype", "-type", "-name", "-newname", "-filter", "-include", "-exclude", "-stream",
+                    "-credential", "-depth", "-target", "-warningaction", "-wa", "-informationaction", "-infa",
+                    "-usequotes", "-quotefields", "-progressaction", "-proga", "-outbuffer", "-ob", "-ev", "-wv",
+                    "-iv", "-ov", "-pv", "-uri", "-method", "-body", "-headers", "-contenttype", "-timeoutsec",
+                    "-useragent", "-proxy", "-compressionlevel", "-source"}
 _PS_WRITERS = {"out-file", "set-content", "sc", "add-content", "ac", "tee-object", "tee", "new-item", "ni",
                "copy-item", "cpi", "copy", "cp", "move-item", "mi", "move", "mv", "remove-item", "ri", "rm",
                "del", "erase", "rd", "rmdir", "rename-item", "rni", "ren", "export-csv", "epcsv",
@@ -621,10 +754,13 @@ def _ps_param_values(rest: List[str], wanted: set) -> Tuple[List[str], List[str]
             if low in wanted and j + 1 < len(rest):
                 values.append(rest[j + 1])
                 j += 2
-            elif low in _PS_NO_VALUE:
-                j += 1
-            else:
+            elif low in _PS_VALUE_PARAMS or low.endswith("variable"):
                 j += 2  # a parameter with a value the guard does not use
+            else:
+                j += 1  # a switch
+            continue
+        if low in ("$true", "$false"):
+            j += 1  # the value of `-Switch:$false`, split off by _ps_normalize
             continue
         positional.append(t)
         j += 1
@@ -633,6 +769,14 @@ def _ps_param_values(rest: List[str], wanted: set) -> Tuple[List[str], List[str]
 
 def _unix_targets(name: str, rest: List[str]) -> List[str]:
     positional = [a for a in rest if not a.startswith("-") or a == "-"]
+    if name in ("cp", "mv", "install", "ln"):
+        for k, a in enumerate(rest):  # a target folder named by option: the sources are only read
+            if a.startswith("--target-directory="):
+                return [a.split("=", 1)[1]]
+            if (a == "--target-directory" or re.match(r"^-[a-zA-Z]*t$", a)) and k + 1 < len(rest):
+                return [rest[k + 1]]
+            if re.match(r"^-t.", a):
+                return [a[2:]]
     if name in ("cp", "mv", "install", "ln", "rsync", "scp", "patch"):
         if name == "patch":
             return [_CWD]
@@ -718,6 +862,50 @@ def write_targets(command: str, shell: str = "Bash", depth: int = 0) -> List[str
     return [t for t in targets if t]
 
 
+_PS_DELETERS = {"remove-item", "ri", "rm", "del", "erase", "rd", "rmdir"}
+
+
+def delete_targets(command: str, shell: str = "Bash", depth: int = 0) -> List[str]:
+    """What a command deletes and does nothing else to: rm, rmdir, unlink, Remove-Item."""
+    out: List[str] = []
+    for segment in _segments(command, shell):
+        _, seg = _unwrap(segment)
+        if seg:
+            name, rest = _cmd_name(seg[0]), seg[1:]
+            if shell != "Bash" and name in _PS_DELETERS:
+                values, positional = _ps_param_values(rest, _PS_PATH_PARAMS)
+                out += values or positional
+            elif shell == "Bash" and name in ("rm", "rmdir", "unlink"):
+                out += [a for a in rest if not a.startswith("-")]
+        if depth < 3:
+            for inner_shell, script in _nested(segment):
+                out += delete_targets(script, inner_shell, depth + 1)
+    return out
+
+
+def made_by_this_stage(rel: str, root: str, active: Optional[Dict[str, Any]]) -> bool:
+    """An untracked path the dispatched stage's own run created: it was not there when the stage began.
+
+    Deleting it is the clean-up of generated files the rules ask for. A path that git tracks or ignores,
+    or that existed before the stage, is not.
+    """
+    if not active or active.get("seq") is None:
+        return False
+    from . import gitio, snapshot  # here, since snapshot imports this module
+    manifest = snapshot.load(root, snapshot.folder_for(active["slug"], int(active["seq"]), int(active["stage"])))
+    if manifest is None:
+        return False
+    key = norm_key(rel)
+    if any(norm_key(p) == key or norm_key(p).startswith(key + "/") for p in manifest.get("state", {})):
+        return False
+    try:
+        out = gitio.text(root, "status", "--porcelain", "--untracked-files=all", "--", rel)
+    except gitio.GitError:
+        return False
+    lines = [line for line in out.splitlines() if line.strip()]
+    return bool(lines) and all(line.startswith("?? ") for line in lines)
+
+
 _FORMATTERS = {"black", "isort", "autopep8", "yapf"}
 
 
@@ -777,8 +965,12 @@ FILE_TOOLS = {"Edit": "file_path", "Write": "file_path", "MultiEdit": "file_path
               "NotebookEdit": "notebook_path"}
 SHELL_TOOLS = {"Bash", "PowerShell"}
 
-ADVICE = ("Do not retry it in another form. If your work needs it, stop and report it in your "
-          "handoff as the pipeline rules say (ESCALATE, naming the area).")
+ADVICE = ("Do not retry it in another form. If your work needs it, say so in your handoff as the "
+          "pipeline rules say.")
+# For a command the guard could not read: the plain spelling of the same command is the one retry it asks for.
+PLAIN = ("The guard reads only a command spelled out plainly. If your work needs this command, run it once "
+         "more spelled out, with no variable, alias, wrapper or inline code in its place, and nothing else. "
+         "If that is blocked too, say so in your handoff as the pipeline rules say.")
 
 
 def _rel_in_root(path: str, root: str) -> str:
@@ -793,32 +985,40 @@ def decide(event: Dict[str, Any], agent: Optional[str]) -> Optional[str]:
     root = find_root(cwd)
     active = read_active(root)
     temps = temp_dirs(event)
+    deny_read = {norm_key(p) for p in (active or {}).get("allow", {}).get("deny_read", [])}
 
-    if tool == "Grep":
-        target = tinput.get("path") or ""
+    if agent == model.AGENT_AUDITOR and (tool in FILE_TOOLS or tool in SHELL_TOOLS):
+        return f"Blocked by the AI team guard: a review only reads; it writes nothing and runs no command. {ADVICE}"
+
+    if tool in ("Read", "Grep"):
+        raw = tinput.get("file_path" if tool == "Read" else "path") or ""
+        if isinstance(raw, str) and raw:
+            path = raw if os.path.isabs(raw) else os.path.join(cwd, raw)
+            if is_secret_path(raw) or is_secret_path(os.path.realpath(path)):
+                return f"Blocked by the AI team guard: {raw} holds secrets, and no agent opens it. {ADVICE}"
+            if inside(path, root):
+                rel = _rel_in_root(path, root)
+                key = norm_key(rel)
+                if (key + "/").startswith(UNREADABLE_PREFIXES) or (tool == "Grep" and key == ".ai-team"):
+                    return (f"Blocked by the AI team guard: {rel} holds the orchestrator's state, which no agent "
+                            f"reads; what you need of it is in your dispatch.")
+                if key in deny_read or (key.startswith(".ai-team") and any(d.startswith(key + "/")
+                                                                           for d in deny_read)):
+                    return (f"Blocked by the AI team guard: {rel} is or holds the first review's report, and the "
+                            f"second review stays independent of it. Go on without it.")
         pattern_glob = tinput.get("glob") or ""
-        if isinstance(target, str) and target and (is_secret_path(target) or is_secret_path(os.path.realpath(target))):
-            return f"Blocked by the AI team guard: the search would read a file that holds secrets. {ADVICE}"
-        if isinstance(pattern_glob, str) and pattern_glob and _SECRET_GLOB.search(pattern_glob):
+        if tool == "Grep" and isinstance(pattern_glob, str) and pattern_glob and (
+                _SECRET_GLOB.search(pattern_glob) or secret_names_in(pattern_glob)):
             return f"Blocked by the AI team guard: the search would read files that hold secrets. {ADVICE}"
         return None
 
-    if tool == "Read" or tool in FILE_TOOLS:
-        key = FILE_TOOLS.get(tool, "file_path")
+    if tool in FILE_TOOLS:
+        key = FILE_TOOLS[tool]
         raw = tinput.get(key) or ""
         if not isinstance(raw, str) or not raw:
             return None
         path = raw if os.path.isabs(raw) else os.path.join(cwd, raw)
         real = os.path.realpath(path)
-        if tool == "Read":
-            if is_secret_path(raw) or is_secret_path(real):
-                return f"Blocked by the AI team guard: {raw} holds secrets, and no agent opens it. {ADVICE}"
-            if active and inside(path, root):
-                rel = _rel_in_root(path, root)
-                if norm_key(rel) in {norm_key(p) for p in active.get("allow", {}).get("deny_read", [])}:
-                    return (f"Blocked by the AI team guard: {rel} is the first review's report, and the second "
-                            f"review stays independent of it. Go on without it.")
-            return None
         if inside(path, root) and inside(real, root):
             rel = _rel_in_root(path, root)
             if not active:
@@ -839,10 +1039,23 @@ def decide(event: Dict[str, Any], agent: Optional[str]) -> Optional[str]:
             return None
         text = _strip_bodies(command)
         for segment in _segments(command, tool):
-            unseen = _unseen_script(segment, text)
+            unseen = _unseen_script(segment, text, tool)
             if unseen:
-                return (f"Blocked by the AI team guard: `{unseen}` runs text the guard cannot read. Run the "
-                        f"command itself. {ADVICE}")
+                return f"Blocked by the AI team guard: `{unseen}` runs text the guard cannot read. {PLAIN}"
+        call = _ps_call_on_variable(text) if tool != "Bash" else None
+        if call:
+            return f"Blocked by the AI team guard: `{call}` runs a command whose name is held in a variable. {PLAIN}"
+        if re.search(r"\.ai-team[/\\]+(?:state|snapshots)\b", text, re.IGNORECASE):
+            return ("Blocked by the AI team guard: the pipeline's state and snapshots are the orchestrator's, and "
+                    f"no agent reads or changes them. {ADVICE}")
+        code = inline_code_risk(command, tool)
+        if code:
+            return (f"Blocked by the AI team guard: inline code ({code}) runs a command or writes a file where the "
+                    f"guard cannot see it. Write project files with your file tools. {PLAIN}")
+        link = makes_link(command, tool)
+        if link:
+            return (f"Blocked by the AI team guard: `{link}` makes a link or a junction, and removing a worktree "
+                    f"can delete through one. {ADVICE}")
         mutation = git_mutation(command, tool)
         if mutation:
             return (f"Blocked by the AI team guard: `{mutation}` is not one of the read-only git/gh forms an "
@@ -857,6 +1070,7 @@ def decide(event: Dict[str, Any], agent: Optional[str]) -> Optional[str]:
             return ("Blocked by the AI team guard: write files with your file tools, not with .NET calls from "
                     "the shell. " + ADVICE)
         allow = (active or {}).get("allow", {})
+        deletes = set(delete_targets(command, tool))
         for target in write_targets(command, tool):
             resolved, trusted_temp = _resolve_target(target, cwd)
             if trusted_temp or resolved is None:
@@ -865,6 +1079,8 @@ def decide(event: Dict[str, Any], agent: Optional[str]) -> Optional[str]:
                 rel = _rel_in_root(resolved, root)
                 if active and rel != "<unresolved>" and is_allowed(allow, rel):
                     continue
+                if target in deletes and rel != "<unresolved>" and made_by_this_stage(rel, root, active):
+                    continue  # the clean-up of a file the stage's own run generated
                 return (f"Blocked by the AI team guard: the command writes {target}, which is not in the area "
                         f"of stage {(active or {}).get('label', 'none (no stage is dispatched)')}. Logs go to "
                         f"your scratch folder. {ADVICE}")
