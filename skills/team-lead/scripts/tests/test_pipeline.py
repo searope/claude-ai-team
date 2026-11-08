@@ -54,7 +54,10 @@ def git(root, *args):
 
 class Repo:
     def __init__(self, project=PROJECT):
-        self.root = tempfile.mkdtemp(prefix="ai-team-test-")
+        # TemporaryDirectory, not mkdtemp: its clean-up clears the read-only flag git puts on its object
+        # files, which shutil.rmtree cannot delete on Windows (each test left its repository behind).
+        self._dir = tempfile.TemporaryDirectory(prefix="ai-team-test-")
+        self.root = self._dir.name
         git(self.root, "init", "-q", "-b", "main")
         git(self.root, "config", "user.email", "t@example.com")
         git(self.root, "config", "user.name", "Test")
@@ -71,7 +74,10 @@ class Repo:
         self.start = git(self.root, "rev-parse", "HEAD")
 
     def close(self):
-        shutil.rmtree(self.root, ignore_errors=True)
+        try:
+            self._dir.cleanup()
+        except OSError:  # a file still held open: leave the folder rather than fail the test
+            pass
 
     def path(self, rel):
         return os.path.join(self.root, *rel.split("/"))
