@@ -99,6 +99,15 @@ class Scan:
     fails_when: Optional[str] = None
 
 
+def norm_command(command: str) -> str:
+    """A command as Gates and Scans are compared: one spelling for both path separators.
+
+    A scan runs in the system's shell and a gate in the agent's, so the same command
+    can be written `.venv\\Scripts\\python` in one place and `.venv/Scripts/python` in the other.
+    """
+    return " ".join(command.replace("\\", "/").split())
+
+
 @dataclass
 class Project:
     root: str
@@ -113,12 +122,19 @@ class Project:
     mockup: str = ""
     overrides: str = ""
     scans: List[Scan] = field(default_factory=list)
+    gate_commands: List[str] = field(default_factory=list)
     second_review: Optional[bool] = None
     second_review_raw: str = ""
 
     @property
     def has_gates(self) -> bool:
         return bool(re.search(r"\*\*Gates:?\*\*", self.overrides or ""))
+
+    @property
+    def unscanned_gates(self) -> List[str]:
+        """The gate commands that no scan runs: that these pass is the word of the stage that ran them."""
+        scanned = {norm_command(s.command) for s in self.scans}
+        return [c for c in self.gate_commands if norm_command(c) not in scanned]
 
     def area_of(self, rel: str, slug: Optional[str] = None) -> Optional[str]:
         """The area a project-relative path lies in, or None."""
@@ -147,6 +163,7 @@ class Project:
             "scans": [{"command": s.command, "fails_when": s.fails_when} for s in self.scans],
             "second_review": self.second_review,
             "gates": self.has_gates,
+            "gate_commands": self.gate_commands,
         }
 
 
@@ -205,6 +222,31 @@ def _scans(text: str) -> List[Scan]:
     return scans
 
 
+_GATES_LABEL = re.compile(r"^(?P<indent>\s*)(?:[-*+]\s+)?\*\*Gates:?\*\*")
+
+
+def _gate_commands(overrides: str) -> List[str]:
+    """What stands in backticks under the `Gates` override: the commands the stages run.
+
+    The override is the line of the `**Gates:**` label and the lines indented under it.
+    """
+    lines = (overrides or "").splitlines()
+    for idx, line in enumerate(lines):
+        m = _GATES_LABEL.match(line)
+        if not m:
+            continue
+        indent = len(m.group("indent").expandtabs(4))
+        block = [line]
+        for nxt in lines[idx + 1:]:
+            text = nxt.expandtabs(4)
+            if text.strip() and len(text) - len(text.lstrip()) <= indent:
+                break  # the next override, or text after the block
+            block.append(nxt)
+        found = re.findall(r"`([^`]+)`", "\n".join(block))
+        return list(dict.fromkeys(c.strip() for c in found if c.strip()))
+    return []
+
+
 def _yes_no(value: str) -> Optional[bool]:
     m = re.match(r"\W*(yes|no)\b", value or "", re.IGNORECASE)
     return (m.group(1).lower() == "yes") if m else None
@@ -216,6 +258,7 @@ def load(root: str) -> Project:
     if text is None:
         return Project(root=root, path=model.PROJECT_FILE, exists=False)
     fields = _fields(text)
+    overrides = _section(text, "Overrides for this project")
     return Project(
         root=root,
         path=model.PROJECT_FILE,
@@ -227,8 +270,9 @@ def load(root: str) -> Project:
         workflow=fields.get("workflow", "").strip("` "),
         worktree_setup=fields.get("worktree setup", ""),
         mockup=fields.get("mock-up", ""),
-        overrides=_section(text, "Overrides for this project"),
+        overrides=overrides,
         scans=_scans(text),
+        gate_commands=_gate_commands(overrides),
         second_review=_yes_no(fields.get("second review", "")),
         second_review_raw=fields.get("second review", ""),
     )

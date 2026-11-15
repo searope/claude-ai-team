@@ -64,6 +64,13 @@ its output matches the pattern after `fails when`. Each is a list item with the
 command in backticks. `ai_team.py propose-gates` suggests them for the stack.
 The user approves a list once, and again whenever it changes.
 
+List the commands of the project's gates here as well, the tests among them.
+A gate that is only under `Overrides for this project` is run by its stage
+alone, and that it passed is that stage's word; listed here too, the tool runs
+it itself. A review's `PASS` over a scan that failed or could not run waits for
+the user's decision. `ai_team.py` starts each scan through the system's shell,
+which is `cmd.exe` on Windows: write the command so that it runs there.
+
 - None.
 
 ## Second Review

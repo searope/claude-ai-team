@@ -20,6 +20,7 @@ CLI = os.path.join(SCRIPTS, "ai_team.py")
 sys.path.insert(0, SCRIPTS)
 
 from aiteam import artifacts, guard  # noqa: E402
+from aiteam import project as projmod  # noqa: E402
 
 PROJECT = """# AI Team Pipeline: demo
 
@@ -900,6 +901,25 @@ SCANS_PROJECT = PROJECT.replace("## Overrides for this project", f"""## Scans
 
 ## Overrides for this project""")
 
+CLEAN_SCANS_PROJECT = PROJECT.replace("## Overrides for this project", f"""## Scans
+
+- `{PY} -c "print('all clean')"`
+
+## Overrides for this project""")
+
+# a scan that fails until the file it looks for is there
+FLAG_SCAN_PROJECT = PROJECT.replace("## Overrides for this project", f"""## Scans
+
+- `{PY} -c "import os, sys; sys.exit(not os.path.exists('.ai-team/fixed.flag'))"`
+
+## Overrides for this project""")
+
+GATES = """- **Gates:**
+  - 5. Coding: `ruff check .`, `.venv/Scripts/python -m pytest -q` pass.
+  - 7. Testing: `.venv/Scripts/python -m pytest -q` passes.
+- **Stage Notes:** 5. Coding keeps `src/legacy.py` as it is.
+"""
+
 
 class ChecksTests(unittest.TestCase):
     def setUp(self):
@@ -916,9 +936,9 @@ class ChecksTests(unittest.TestCase):
         else:
             os.environ["CLAUDE_CONFIG_DIR"] = self._old_cfg
 
-    def approve_scans(self, out):
+    def approve_scans(self, out, count=3):
         self.assertEqual(out["action"]["kind"], "scans_approval")
-        self.assertEqual(len(out["action"]["details"]["commands"]), 3)
+        self.assertEqual(len(out["action"]["details"]["commands"]), count)
         self.assertTrue(out["action"]["options"][0]["run"].startswith(f"ai_team decide {SLUG} approve"))
         out = self.r.cli("decide", SLUG, "approve")
         self.assertEqual(out["action"]["type"], "scan")
@@ -949,7 +969,18 @@ class ChecksTests(unittest.TestCase):
         self.assertIn(f".ai-team/scratchpad/{SLUG}-scans.md", out["dispatch"]["text"])
         self.r.handoff("security", "8. Security", "PASS", 0, later=True)
         out = t.ret()
-        self.assertTrue(any("passed although" in n for n in out.get("notices", [])))
+        # a PASS does not stand on its own while a scan of its round failed or could not run
+        self.assertEqual((out["action"]["type"], out["action"]["kind"]), ("ask_user", "scans_not_passed"))
+        self.assertEqual(out["gate_status"], "BLOCKED")
+        details = out["action"]["details"]
+        self.assertEqual(len(details["failed"]), 1)
+        self.assertIn("VULNERABLE", details["failed"][0])
+        self.assertEqual(details["could_not_run"], ["definitely-not-a-scanner-xyz --version"])
+        self.assertEqual(details["report"], f".ai-team/scratchpad/{SLUG}-scans.md")
+        self.assertEqual(details["handoff"], f".ai-team/scratchpad/{SLUG}-security-context.md")
+        self.assertEqual(self.r.cli("show", SLUG)["ledger"]["stages"]["8"]["status"], "PENDING")
+        self.assertEqual(self.r.cli("next", SLUG, "--dispatch")["action"]["kind"], "scans_not_passed")
+        out = self.r.cli("decide", SLUG, "accept", "--dispatch")
         self.assertEqual(out["dispatch"]["label"], "9. Second Review")
         self.assertIn(f".ai-team/scratchpad/{SLUG}-scans.md", out["dispatch"]["text"])
         self.assertNotIn("security-context", out["dispatch"]["text"])  # independent of the first review
@@ -963,12 +994,91 @@ class ChecksTests(unittest.TestCase):
         self.approve_scans(out)
         out = self.r.cli("scan", SLUG, "--dispatch")
         self.r.handoff("security", "8. Security", "PASS", 0)
-        t.ret()
+        out = t.ret()
+        self.assertEqual(out["action"]["kind"], "scans_not_passed")
+        out = self.r.cli("decide", SLUG, "accept", "--dispatch")
+        self.assertEqual(out["dispatch"]["label"], "9. Second Review")
         self.r.handoff("review2", "9. Second Review", "PASS", 0)
         out = t.ret()
-        self.assertEqual(out["action"]["type"], "deliver")
+        self.assertEqual(out["action"]["type"], "deliver")  # the user's decision holds for the round
+        led = self.r.cli("show", SLUG)["ledger"]
+        self.assertTrue(any("let the PASS of 8. Security stand" in h for h in led["history"]))
         out = self.r.cli("delivered", SLUG)
         self.assertEqual(out["gate_status"], "READY_FOR_MERGE")
+
+    def test_pass_over_a_failed_scan_is_sent_back_on_the_users_word(self):
+        t, out = self.to_review()
+        self.approve_scans(out)
+        self.r.cli("scan", SLUG, "--dispatch")
+        self.r.handoff("security", "8. Security", "PASS", 0)
+        out = t.ret()
+        self.assertEqual(out["action"]["kind"], "scans_not_passed")
+        runs = [o["run"] for o in out["action"]["options"]]
+        self.assertIn(f"ai_team decide {SLUG} accept --dispatch", runs)
+        self.assertIn(f"ai_team decide {SLUG} continue --dispatch", runs)
+        self.assertFalse(self.r.cli("decide", SLUG, "approve", expect_ok=False)["ok"])  # this is no gate to approve
+        self.assertEqual(self.r.cli("next", SLUG)["action"]["kind"], "scans_not_passed")
+        out = self.r.cli("decide", SLUG, "change", "--area", "Source", "--text", "upgrade requests", "--dispatch")
+        self.assertEqual(out["dispatch"]["label"], "5. Coding")
+        self.assertEqual(out["round"], 1)
+        self.assertIn(f"- Source: upgrade requests (.ai-team/scratchpad/{SLUG}-scans.md)", out["dispatch"]["text"])
+        led = self.r.cli("show", SLUG)["ledger"]
+        self.assertEqual(led["counters"]["security"], 0)  # the user's decision counts toward no cap
+        self.assertEqual(led["stages"]["8"]["status"], "PENDING")
+        self.r.handoff("dev", "5. Coding", "DONE", 1)
+        t.ret()
+        self.r.handoff("test", "7. Testing", "DONE", 1)
+        out = t.ret()
+        self.assertEqual(out["action"]["type"], "scan")  # the new round scans again before its review
+
+    def test_scans_and_review_run_again_once_the_user_put_things_right(self):
+        t, out = self.to_review()
+        self.approve_scans(out)
+        self.r.cli("scan", SLUG, "--dispatch")
+        self.r.handoff("security", "8. Security", "PASS", 0)
+        t.ret()
+        out = self.r.cli("decide", SLUG, "continue", "--dispatch")
+        self.assertEqual((out["action"]["type"], out["round"]), ("scan", 1))
+        out = self.r.cli("scan", SLUG, "--dispatch")
+        self.assertEqual(out["dispatch"]["label"], "8. Security")
+        self.assertIn("the scans run again", out["dispatch"]["text"])
+        led = self.r.cli("show", SLUG)["ledger"]
+        self.assertEqual(led["counters"], {"tests": 0, "security": 0, "escalations": 0})
+
+    def test_pass_stands_when_every_scan_passed(self):
+        self.r.close()
+        self.r = Repo(CLEAN_SCANS_PROJECT)
+        t, out = self.to_review()
+        self.approve_scans(out, count=1)
+        out = self.r.cli("scan", SLUG, "--dispatch")
+        self.assertEqual(out["dispatch"]["label"], "8. Security")
+        self.r.handoff("security", "8. Security", "PASS", 0)
+        out = t.ret()
+        self.assertEqual(out["action"]["type"], "deliver")
+
+    def test_a_block_over_a_failed_scan_is_routed_as_before(self):
+        t, out = self.to_review()
+        self.approve_scans(out)
+        self.r.cli("scan", SLUG, "--dispatch")
+        self.r.handoff("security", "8. Security", "BLOCK", 0, "Source", "the audit names requests 2.0")
+        out = t.ret()
+        self.assertEqual(out["dispatch"]["label"], "5. Coding")
+        self.assertEqual(self.r.cli("show", SLUG)["ledger"]["counters"]["security"], 1)
+
+    def test_a_scan_that_passes_on_a_second_run_settles_the_question(self):
+        self.r.close()
+        self.r = Repo(FLAG_SCAN_PROJECT)
+        t, out = self.to_review()
+        self.approve_scans(out, count=1)
+        out = self.r.cli("scan", SLUG, "--dispatch")
+        self.assertEqual(out["scans"]["results"][0]["result"], "FAILED")
+        self.r.handoff("security", "8. Security", "PASS", 0)
+        out = t.ret()
+        self.assertEqual(out["action"]["kind"], "scans_not_passed")
+        self.r.write(".ai-team/fixed.flag", "")
+        out = self.r.cli("scan", SLUG, "--dispatch")  # the same round, run by hand
+        self.assertEqual(out["scans"]["results"][0]["result"], "passed")
+        self.assertEqual(out["action"]["type"], "deliver")
 
     def test_propose_gates_for_a_uv_python_project(self):
         self.r.write("pyproject.toml", "[project]\nname='x'\n[tool.ruff]\nline-length=100\n")
@@ -981,6 +1091,10 @@ class ChecksTests(unittest.TestCase):
         self.assertIn("uvx pip-audit .", commands)
         self.assertTrue(any(c.startswith("uvx bandit -r src") for c in commands))
         self.assertTrue(any(c.startswith("gitleaks dir src") for c in commands))
+        # each gate is proposed as a scan too, ahead of the audits: the tool then runs it itself
+        self.assertEqual(commands[:2], ["uv run ruff check .", "uv run pytest -q"])
+        self.assertEqual([s["gate"] for s in out["scans"][:3]], [True, True, False])
+        self.assertIn("- `uv run pytest -q`", out["markdown_sections"])
         self.assertIn("## Scans", out["markdown_sections"])
         self.assertIn("- **Gates:**", out["markdown_gates"])
 
@@ -989,6 +1103,35 @@ class ChecksTests(unittest.TestCase):
         try:
             out = r.cli("doctor", expect_ok=False)
             self.assertTrue(any("no Gates and no Scans" in w for w in out["warnings"]))
+        finally:
+            r.close()
+
+    def test_doctor_names_the_gates_no_scan_runs(self):
+        gated = PROJECT.replace("- None.\n", GATES)
+        r = Repo(gated)
+        try:
+            out = r.cli("doctor", expect_ok=False)
+            self.assertEqual(out["facts"]["gates_not_scanned"], ["ruff check .", ".venv/Scripts/python -m pytest -q"])
+            warning = [w for w in out["warnings"] if "no scan runs" in w]
+            self.assertEqual(len(warning), 1)
+            self.assertIn("`ruff check .`", warning[0])
+            self.assertNotIn("src/legacy.py", warning[0])  # the override after Gates is no gate
+            # the same commands under Scans, the path as the system's shell takes it: nothing rests on a word
+            r.write(".claude/ai-team-project.md", gated.replace(
+                "## Overrides for this project",
+                "## Scans\n\n- `ruff check .`\n- `.venv\\Scripts\\python -m pytest -q`\n\n"
+                "## Overrides for this project"))
+            out = r.cli("doctor", expect_ok=False)
+            self.assertEqual(out["facts"]["gates_not_scanned"], [])
+            self.assertFalse(any("no scan runs" in w for w in out["warnings"]))
+        finally:
+            r.close()
+
+    def test_doctor_warns_when_gates_are_only_words(self):
+        r = Repo(PROJECT.replace("- None.\n", "- **Gates:** 7. Testing: the whole test suite passes.\n"))
+        try:
+            out = r.cli("doctor", expect_ok=False)
+            self.assertTrue(any("no command in backticks" in w for w in out["warnings"]))
         finally:
             r.close()
 
@@ -1256,6 +1399,19 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(artifacts.split_areas("`UI spec` and Copy"), ["UI spec", "Copy"])
         self.assertEqual(artifacts.split_areas("user"), ["user"])
         self.assertEqual(artifacts.split_areas("Database"), ["?Database"])
+
+    def test_gate_commands_are_what_stands_in_backticks_under_gates(self):
+        overrides = ("- **Fast Path:** at most three files, as `git diff --stat` counts them.\n"
+                     "- **Gates:** every stage: `make lint` passes.\n"
+                     "  - 7. Testing: `make test`\n"
+                     "    and `make e2e` pass.\n"
+                     "\n"
+                     "  - 5. Coding: `make lint`, `make test` pass.\n"
+                     "- **Stage Notes:** 5. Coding leaves `vendor/` alone.\n")
+        self.assertEqual(projmod._gate_commands(overrides), ["make lint", "make test", "make e2e"])
+        self.assertEqual(projmod._gate_commands("- None."), [])
+        self.assertEqual(projmod.norm_command(".venv\\Scripts\\python   -m pytest"),
+                         projmod.norm_command(".venv/Scripts/python -m pytest"))
 
 
 if __name__ == "__main__":

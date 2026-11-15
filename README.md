@@ -52,12 +52,18 @@ feature needs them, and the second review when the project turns it on.
 - A **project file**, `.claude/ai-team-project.md`, is all a project holds: its source, test and infra paths, its
   git workflow settings, how a page is rendered for a mock-up, its scans, whether the second review runs, its
   overrides of the rules, and a few lines that say when the pipeline applies.
-- **Scans** are read-only checks, such as a dependency audit or a search for secrets, that the project file lists
+- **Scans** are checks, such as a dependency audit or a search for secrets, that the project file lists
   under `Scans`. Once per round, before its first review, the tool runs them itself, from the feature's folder, and gives the reviewers
   their report, so these checks rest on tools and not on an agent's word. A failed scan blocks the review,
-  unless the review shows that the finding is a false positive or lies outside the change. The tool runs a list
+  unless the review shows that the finding is a false positive or lies outside the change. A review that
+  reports `PASS` although a scan of its round failed or could not run does not pass on its own: the tool stops,
+  and you choose between a fix by the stage that writes the area, a new run of the scans once you have put a
+  tool or a command right, and letting the `PASS` stand. The tool runs a list
   of scans only after you have approved it, and asks again when the list changes. Gates are the other kind of
   check: commands that a stage runs itself before it reports `DONE`, set under `Overrides for this project`.
+  That a gate passed is the stage's word, unless its command is listed under `Scans` as well: then the tool
+  runs it too. `team-lead` proposes each gate as a scan, and `ai_team.py doctor` names the gates that no scan
+  runs.
 - The **second review**, stage 9, runs only where the project file says `Second Review: yes`. `second-reviewer`
   audits the same change as Security, on another model, and reads neither the first review's report nor its
   handoff: the guard refuses it that file. It costs one more review in each round.

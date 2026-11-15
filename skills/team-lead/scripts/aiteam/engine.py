@@ -267,16 +267,45 @@ def _complete_stages(ctx: Ctx) -> bool:
                     f"The ADR is not complete: {problem}. Write each Allowed Blast Radius list as rules "
                     f"section 4 says: a heading or bold label with that exact name, then one list item per "
                     f"file starting with the path in backticks, or the one item none.")
+        if ok and st.review and h.status == "PASS":
+            scans = _open_scans(ctx)
+            if scans["failed"] or scans["could_not_run"]:
+                # A PASS stands on its own only when every scan of the round ran and passed.
+                # What the tool ran and saw fail is not waved through on a review's word: the user decides.
+                ok = False
+                if not led.get("awaiting"):
+                    summary = f"{st.label} reports PASS, but {_scans_text(scans)}"
+                    led["awaiting"] = {"kind": "scans_not_passed", "stage": st.number, "handoff": h.path,
+                                       "report": model.scan_report_path(ctx.slug), **scans, "summary": summary}
+                    ledger.history(led, f"BLOCKED: {summary}")
+                    changed = True
         if ok:
             rec.update(status="DONE", done_seq=ledger.next_seq(led), done_round=led["round"])
             ledger.history(led, f"{st.label}: {h.status} (round {led['round']})")
-            scans = led.get("scan_summary") or {}
-            if st.review and h.status == "PASS" and scans.get("round") == led["round"] and scans.get("failed"):
-                ledger.notice(led, f"{st.label} passed although {len(scans['failed'])} scan(s) failed "
-                                   f"({', '.join(scans['failed'])}): its report should say under Observations why "
-                                   f"each finding is a false positive or outside the feature. Check that it does.")
             changed = True
     return changed
+
+
+def _open_scans(ctx: Ctx) -> Dict[str, List[str]]:
+    """The scans of this round that did not pass and that the user has not let stand."""
+    led = ctx.led
+    summary = led.get("scan_summary") or {}
+    if summary.get("round") != led["round"]:
+        return {"failed": [], "could_not_run": []}
+    let = led.get("scans_let_stand") or {}
+    if let.get("round") != led["round"]:
+        let = {}
+    return {key: [c for c in summary.get(key) or [] if c not in (let.get(key) or [])]
+            for key in ("failed", "could_not_run")}
+
+
+def _scans_text(scans: Dict[str, Any]) -> str:
+    parts = []
+    if scans.get("failed"):
+        parts.append(f"{len(scans['failed'])} scan(s) failed ({', '.join(scans['failed'])})")
+    if scans.get("could_not_run"):
+        parts.append(f"{len(scans['could_not_run'])} scan(s) could not run ({', '.join(scans['could_not_run'])})")
+    return " and ".join(parts)
 
 
 def _adr_lists_problem(ctx: Ctx) -> Optional[str]:
@@ -486,6 +515,15 @@ def _options(kind: str, aw: Dict[str, Any], slug: str) -> List[Dict[str, str]]:
         return [opt("Run these scans", "They run before every review in projects with this exact list; "
                     "you are asked again when the list changes.", "decide {slug} approve --dispatch"),
                 stop]
+    if kind == "scans_not_passed":
+        return [opt("Have it fixed", "The stage that writes that area runs again with your words; then the "
+                    "scans and the review run again.",
+                    'decide {slug} change --area <area> --text "<what should change>" --dispatch'),
+                opt("I fixed it: scan again", "For a missing tool or a scan command that you put right "
+                    "yourself: the scans and the review run again.", "decide {slug} continue --dispatch"),
+                opt("Let the PASS stand", "The feature goes on with those scans as they are, and the ledger "
+                    "records that you decided so.", "decide {slug} accept --dispatch"),
+                stop]
     if kind == "user":
         if aw.get("status") == "DEFECTS":
             return [opt("Accept it", "The feature runs on as it is.", "decide {slug} accept --dispatch"),
@@ -543,7 +581,7 @@ def _ask(ctx: Ctx, aw: Dict[str, Any]) -> Dict[str, Any]:
         details["ui_handoff"] = model.handoff_path(ctx.slug, 3)
         line = (ctx.project.mockup or "").strip().strip("`").lower()
         details["mockup_line"] = "none" if line in ("", "none") or line.startswith("<") else "set"
-    if kind == "violation":
+    if kind in ("violation", "scans_not_passed"):
         details["stage_label"] = model.stage(aw["stage"]).label
     if kind == "scans_approval":
         details["commands"] = [{"command": s.command, "fails_when": s.fails_when} for s in ctx.project.scans]
@@ -717,6 +755,12 @@ def evaluate(ctx: Ctx) -> Dict[str, Any]:
     aw = led.get("awaiting") or {}
     if aw.get("kind") == "scans_approval" and (not ctx.project.scans or checks.scans_approved(ctx.project.scans)):
         led["awaiting"] = None  # the scans were taken out or approved elsewhere
+    if aw.get("kind") == "scans_not_passed":
+        scans = _open_scans(ctx)  # `scan` may have run again since the question was put
+        if scans["failed"] or scans["could_not_run"]:
+            aw.update(scans, summary=f"{model.stage(aw['stage']).label} reports PASS, but {_scans_text(scans)}")
+        else:
+            led["awaiting"] = None
     if aw.get("kind") == "violation":
         return _ask(ctx, aw)  # the stage's report counts only once its changes are settled
     for _ in range(100):
@@ -1057,6 +1101,18 @@ def decide(ctx: Ctx, decision: str, text: Optional[str] = None, area: Optional[s
             pending = [i for i in (aw.get("pending") or []) if i.get("route_to") != item["route_to"]]
             _apply_items(ctx, aw["stage"], "DEFECTS", [item] + pending, aw.get("handoff"), answer, counted=False)
             led["directions"][str(item["route_to"])] = answer
+        elif kind == "scans_not_passed":
+            item = _plan_items(ctx, aw["stage"], [norm])[0]
+            if item["edge"]:
+                raise PipelineError(f"{norm} belongs to a stage the fast path skips: let the PASS stand, have "
+                                    f"it changed in another area, stop, or move the feature to all the stages "
+                                    f"(`fast-path {ctx.slug} to-full`)")
+            led["awaiting"] = None
+            # the item cites the scan report: it holds the output the routed stage has to answer
+            _add_defects(ctx, [item], "scan", answer, aw.get("report"))
+            backward_route(ctx, item["route_to"], f"the user's decision on the scans that did not pass at "
+                                                  f"{model.stage(aw['stage']).label}: {answer}")
+            led["directions"][str(item["route_to"])] = answer
         elif kind in (None, "design_gate", "mockup_gate"):
             raise PipelineError("no gate is open: the design was approved already. The feature can run on to "
                                 "READY_FOR_MERGE or be stopped. " + _where(ctx))
@@ -1096,6 +1152,16 @@ def decide(ctx: Ctx, decision: str, text: Optional[str] = None, area: Optional[s
             led["awaiting"] = None
             led["round"] += 1
             ledger.history(led, f"{model.stage(aw['stage']).label} unblocked by the user, round {led['round']}")
+        elif kind == "scans_not_passed":
+            led["awaiting"] = None
+            if decision == "accept":
+                led["scans_let_stand"] = {"round": led["round"], "failed": aw.get("failed") or [],
+                                          "could_not_run": aw.get("could_not_run") or []}
+                ledger.history(led, f"The user let the PASS of {model.stage(aw['stage']).label} stand: "
+                                    f"{_scans_text(aw)}")
+            else:  # continue: the user put right what kept them from passing, outside the stages
+                backward_route(ctx, model.REVIEW_STAGE, "the scans run again, since the user put right what "
+                                                         "kept them from passing: answer the new scan report")
         elif kind == "violation":
             led["awaiting"] = None
             files = ", ".join(f["path"] for f in aw["files"])
@@ -1447,10 +1513,12 @@ def run_scans(ctx: Ctx, do_dispatch: bool = False, direction: Optional[str] = No
                         + (f", {len(missing)} could not run" if missing else ""))
     if failed:
         ledger.notice(led, f"{len(failed)} scan(s) failed: {', '.join(failed)}. The reviewers get the report "
-                           f"({report}).")
+                           f"({report}); a PASS over a failed scan comes to you as a question.")
     if missing:
-        ledger.notice(led, f"These scans could not run, most likely because the tool is not installed: "
-                           f"{', '.join(missing)}. Install it, or take the scan out of the project file.")
+        ledger.notice(led, f"These scans could not run, most likely because the tool is not installed or the "
+                           f"command does not start in the system's shell: {', '.join(missing)}. They checked "
+                           f"nothing, so a review's PASS comes to you as a question. Put the tool or the command "
+                           f"right, or take the scan out of the project file.")
     out = next_action(ctx, do_dispatch, direction)
     out["scans"] = {"report": report, "results": summary}
     return out

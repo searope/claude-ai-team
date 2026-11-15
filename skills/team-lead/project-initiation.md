@@ -127,16 +127,20 @@ trivial runs all the stages, each of them a model run of its own. Propose:
 
 **Gates and scans.** Gates are commands that a stage runs and that must pass
 before it reports `DONE` (rules, section 6); the stage runs them and reports
-them. Scans are read-only checks that `ai_team` runs itself once per round,
+them. Scans are checks that `ai_team` runs itself once per round,
 before its first review, and whose report the reviewers must answer: they rest on the tool, not
 on an agent's word. Run `ai_team propose-gates`: it detects the stack (Python
 first, with uv, Poetry or Pipenv when their lock file is there; .NET; Node;
 Rust; Go) and proposes both, such as `pytest`, `ruff`, `mypy`, `pip-audit`,
 `bandit`, `dotnet test`, `dotnet list package --vulnerable`, `npm audit` and
-gitleaks for secrets. Show the user each proposed check with what it does and
+gitleaks for secrets. It lists each gate among the scans too, ahead of the
+audits: a gate that is no scan is run by its stage alone, and that it passed is
+that stage's word. Show the user each proposed check with what it does and
 the link of its tool; its `notes` say which tools are not installed: a gate
 whose tool is missing stops its stage, and a scan whose tool is missing is
-reported as `COULD NOT RUN`.
+reported as `COULD NOT RUN`. A review's `PASS` over a scan that failed or
+could not run waits for the user's decision, so a scan that is listed has to
+be able to run.
 
 **A second review.** Ask whether stage 9 should run: a second read-only review
 of the same change on another model, which blind spots of the first may not

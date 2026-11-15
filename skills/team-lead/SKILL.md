@@ -16,8 +16,9 @@ allowed-tools:
   - Skill
   - AskUserQuestion
   - EnterWorktree
-  - "Edit(.ai-team/**)"
-  - "Write(.ai-team/**)"
+  # handoffs only: ai_team writes the ledger, the snapshots and its own reports
+  - "Edit(.ai-team/scratchpad/*-context.md)"
+  - "Write(.ai-team/scratchpad/*-context.md)"
   # project initiation only: the project file, its import line, .gitignore
   - "Write(.claude/ai-team-project.md)"
   - "Edit(CLAUDE.md)"
@@ -56,7 +57,7 @@ allowed-tools:
   - "PowerShell(git branch --list *)"
   - "PowerShell(gh issue view *)"
 metadata:
-  version: "12.0"
+  version: "12.1"
   role: "Principal Team Lead & Dynamic Orchestrator"
 ---
 
@@ -203,8 +204,10 @@ In the project:
    through a command. Never compute a route, a round or a gate yourself, and
    never edit a file under `.ai-team/state/`.
 4. **SHELL FOR GIT AND `ai_team` ONLY:** Work with `Read`, `Glob` and `Grep`. Do
-   not re-run an agent's builds or tests: a stage's `DONE` is its word that its
-   gates passed. In the shell you run `ai_team`, `git` and `gh` only: a command
+   not re-run an agent's builds or tests yourself. `ai_team` runs the gates
+   that the project file also lists under `Scans`, before the review; for a
+   gate that is not listed there, a stage's `DONE` is its word that the gate
+   passed. In the shell you run `ai_team`, `git` and `gh` only: a command
    that reads, whenever a step needs what it shows, and a command that changes
    something only where this skill, the feature's git workflow or a project
    override gives you that step. Run each command on its own and as it is
@@ -246,8 +249,11 @@ The stages up to Architecture are the design stages. The mock-up gate follows
 UI/UX, and the design gate stands before Coding. Once per round, before its
 first review, `ai_team` runs the scans of the project file's `Scans` section
 itself and gives the reviewers their report: those checks rest on tools, not on
-any agent's word. A fast path skips the design stages and Infra, which builds
-only from an ADR.
+any agent's word. A project lists its gates there as well, so that the tool
+runs them and not only the stage that reports them. A review's `PASS` does not
+stand on its own while a scan of its round failed or could not run: `ai_team`
+asks the user (section 4). A fast path skips the design stages and Infra, which
+builds only from an ADR.
 
 Discovery always asks the user its questions at the start (rules, section 6).
 A project rule that has the stages ask the user nothing does not reach it, so
@@ -264,10 +270,10 @@ Do this on every run.
    `Pipeline Version` 8.1, the version this skill is written for.
 2. Run `ai_team doctor` once per session. Tell the user each warning in plain
    words; a missing project file is the first run, below. When it says the
-   project sets no Gates and no Scans, run `ai_team propose-gates` and show the
-   user its blocks with what each check does, and that they paste them into
-   the project file (`where` says where); you never rewrite that file
-   yourself.
+   project sets no Gates and no Scans, or that no scan runs its gates, run
+   `ai_team propose-gates` and show the user its blocks with what each check
+   does, and that they paste them into the project file (`where` says where);
+   you never rewrite that file yourself.
 3. Check git: `git rev-parse --is-inside-work-tree`, and note whether
    `git status --porcelain` is empty. If the project is not a repository, tell
    the user and run `git init`.
@@ -451,6 +457,17 @@ Without the tool, or when the question goes unanswered, stop.
   without asking again, in any project with this exact list. Approving runs
   them; a scan the user does not want is theirs to take out of the project
   file, and the next run asks again with the shorter list.
+- **`scans_not_passed`:** a review reported `PASS`, but scans of its round
+  failed (`details.failed`) or could not run (`details.could_not_run`), so the
+  `PASS` waits for the user. `Read` the review's handoff (`details.handoff`)
+  and say, scan by scan, the reason it gives under `## Observations` for not
+  blocking on a failed one, or that it gives none; give the link to the scan
+  report (`details.report`). A scan that could not run checked nothing: say
+  what the report shows of it, a missing tool or a command the shell could not
+  start. The options: have it fixed (`change` with the area whose files must
+  change and the user's words), scan again once the user has put the tool or
+  the command right, let the `PASS` stand, or stop. Never choose for the user,
+  and never take a scan out of the project file yourself.
 - **`open_defects`, `conflict_unowned`, `review_drift`, `blocked`:** say what
   `summary` and `details` hold, and give the options. A `blocked` whose summary
   says that HEAD moved while a stage ran means a commit no stage may make:
