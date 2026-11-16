@@ -11,6 +11,9 @@
   "status": "BLOCK",
   "blocked_on": [
    "Tests"
+  ],
+  "cites": [
+   "AC-2"
   ]
  },
  "slug": "average-in-summary",

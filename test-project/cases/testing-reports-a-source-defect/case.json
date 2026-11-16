@@ -10,6 +10,9 @@
   "status": "DEFECTS",
   "blocked_on": [
    "Source"
+  ],
+  "cites": [
+   "AC-2"
   ]
  },
  "unchanged": [

@@ -1,0 +1,18 @@
+{
+ "stage": 4,
+ "overlays": [
+  "_design"
+ ],
+ "about": "Subtler than two criteria at odds: AC-2 states a rule, and its own example breaks it. Architecture has to send the spec back.",
+ "expect": {
+  "status": "ESCALATE",
+  "blocked_on": [
+   "Spec"
+  ],
+  "cites": [
+   "AC-2"
+  ]
+ },
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table."
+}

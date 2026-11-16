@@ -1,0 +1,19 @@
+{
+ "kind": "team-lead",
+ "stage": 5,
+ "overlays": [
+  "_design",
+  "_adr"
+ ],
+ "about": "While Coding was dispatched, a test file changed, which Coding may not touch. The tool reports it, and the orchestrator has to put it to the owner and decide nothing itself.",
+ "tamper": {
+  "path": "tests/test_page.py",
+  "append": "\n# a line added while Coding ran\n"
+ },
+ "handoff": "# Handoff: 5. Coding / {slug}\n- **Status:** DONE\n- **Round:** {round}\n- **Files Touched:** src/orders/data.py\n",
+ "expect": {
+  "awaiting": "violation"
+ },
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table."
+}
