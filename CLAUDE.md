@@ -28,7 +28,8 @@ the only thing that writes there. Follow "Change the team" in `README.md`:
 
 1. Edit the files in this repository, on a branch.
 2. Test them in a scratch project as project-level skills and agent types under other names, with headless
-   `claude -p` runs.
+   `claude -p` runs. `python tools/trial.py run` does this on the test project in `test-project/` ("Trial run"
+   in `README.md`). It spends model time, so say what a run will cost before you start one.
 3. Install with `pwsh ./sync.ps1 install` only when the user has agreed to go live.
 4. Never run `pwsh ./sync.ps1 save` on a branch with changes that are not installed: it overwrites them.
 

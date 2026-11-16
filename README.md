@@ -132,6 +132,13 @@ feature needs them, and the second review when the project turns it on.
   without: the time and tokens of each, and the material for a blind judgement of the two changes. It is not
   part of the team and is not installed.
 - `trials/`: reports of trial runs of the team.
+- `test-project/`: what a trial run of the team works on. `project/` is a small shop's orders page, with tests, a
+  container file and a CI workflow. `project-file.md` is its project file: gates for Coding, Infra and Testing,
+  the same commands as scans, and the second review turned on. `request.md` is one change that needs all ten
+  stages, and `owner.md` holds the owner's answers to whatever the team asks. None of it is part of the team,
+  and nothing installs it.
+- `tools/trial.py`: runs the whole pipeline on a copy of the test project, headless, with the team under `-next`
+  names, and checks what the run left behind. "Trial run" below says how.
 
 ## Where the live copy is
 
@@ -243,19 +250,20 @@ A file in `~/.claude` is live at once in every project, including for features t
 made and tested here first, and installed last:
 
 1. Make a branch in this repository and edit the files here.
-2. Test without installing. Copy the team into a scratch project under other names: each skill folder as
+2. Test without installing: `python tools/trial.py run` ("Trial run" below). It does by script what this step
+   asks for. The team is copied into a scratch project under other names: each skill folder as
    `.claude/skills/<name>-next/` and each agent type as `.claude/agents/<name>-next.md`, with every team name
-   changed to its `-next` form in all of those files, the tool's `model.py` included. Run it there with
-   `claude -p`, starting from `/team-lead-next`, with file edits accepted and with the git commands and the shell
-   commands of the build stages and of the project's `Mock-up` line allowed (`--allowedTools`). A headless run
-   cannot write under `.claude/`, so put the project file into the scratch project by hand. The first stage is a
-   dialogue: answer it in continued turns (`--continue`). A project-level skill or agent type is seen only by
-   that project, and the renamed table of stages dispatches the renamed skills, so the live team takes no part
-   in the test. `claude -p` skips the frontmatter hooks of an agent file in a project folder that is not
-   trusted, so the guard does not run in such a test. A test of the guard needs the agent types passed with
-   `--agents <file.json>` instead: one entry for each, with its `description`, `prompt`, `tools` and `hooks`,
-   and each hook command pointed at the scratch project's copy of `ai_team_guard.py`. The guard denies every
-   call of an agent type that `PIPELINE_AGENTS` in `model.py` does not name, so rename the names there too.
+   changed to its `-next` form in all of those files, the tool's `model.py` included. It runs there with
+   `claude -p`, starting from `/team-lead-next`, with file edits accepted and with the tool, the project's
+   checks and git's reading commands allowed (`--allowedTools`). A project-level skill or agent type is seen
+   only by that project, and the renamed table of stages dispatches the renamed skills, so the live team takes
+   no part in the test. `claude -p` skips the frontmatter hooks of an agent file in a project folder that is
+   not trusted, so the agent types are also passed with `--agents <file.json>`: one entry for each, with its
+   `description`, `prompt`, `tools` and `hooks`, and each hook command pointed at the scratch project's copy
+   of `ai_team_guard.py`. Hooks given that way do run. The guard denies every call of an agent type that
+   `PIPELINE_AGENTS` in `model.py` does not name, which is why the names are changed there too. A change to a
+   project of your own that the test project does not have, such as its `Mock-up` line or a fast path, is
+   tried the same way by hand, in a scratch copy of that project.
 3. Run `pwsh ./sync.ps1 check` to see what `install` would change, then `pwsh ./sync.ps1 install`. After a change
    to a hook, see it work on the live agent type ("Live check").
 4. Commit, merge and push.
@@ -284,6 +292,78 @@ any of the three disagree.
 `pwsh ./sync.ps1 save` copies the other way, from `~/.claude` into this repository, and removes here any team file
 that no longer exists there. Use it only to pick up an edit that was made directly in `~/.claude`. On a branch
 with changes that are not installed yet it would overwrite them.
+
+## Trial run
+
+`python tools/trial.py run` puts the team in this repository through one whole feature, on the test project in
+`test-project/`, without installing anything. It needs `python`, `git` and `claude` on the PATH; `--claude <path>`
+names the program where it is not.
+
+```
+python tools/trial.py run
+python tools/trial.py run --stage-model sonnet
+python tools/trial.py check --work <the folder a run left>
+```
+
+What a run does:
+
+1. **Builds a scratch project.** A new folder in the temp folder gets a copy of `test-project/project`, its
+   project file, and the team under `-next` names, committed as the feature's starting point.
+   `ai_team.py doctor` has to find nothing wrong in the copy, and the project's own checks have to pass on the
+   starting code.
+2. **Probes the guard.** The trial's read-only agent type is asked to read a file named like a secret. The run
+   goes on only when the guard refuses.
+3. **Runs the request.** `/team-lead-next` gets `test-project/request.md`: an "Export CSV" button with a new
+   setting. The change has text and a screen, and the setting has to reach the container, so Copy, UI/UX and
+   Infra all run, and the project file turns the second review on. The project also holds one test that pins
+   the page's header, which the request changes. Coding may not touch a test, so the expected course is that
+   it reports the test as a defect and the tool routes it forward to Testing.
+4. **Answers as the owner.** Discovery's questions get `test-project/owner.md` in a continued turn. The mock-up
+   gate, the design gate and the scan list get an approval. Any other stop gets the answer the script's table
+   holds for its kind, and the report names it.
+5. **Checks the result** and prints a report: every stage `DONE`, every specialist skill started and as its own
+   agent type, the artifacts and the nine handoffs, the scans run by the tool and passed, the project's checks
+   passing on what was built, no change outside the feature's areas, a change in each of Source, Tests and
+   Infra, and the folder holding what the review saw. It exits with 1 when one of these fails.
+
+The run's folder stays: `project/` is the feature as built, and `run/` holds each turn's output and
+`report.txt`.
+
+`python tools/trial.py cases` runs the edge cases in `test-project/cases/`. A whole run only meets a push-back
+when a stage happens to cause one, so each case plants one and expects one answer from one stage:
+
+| Case | What is planted | What has to come back |
+| :--- | :--- | :--- |
+| `architect-escalates-to-spec` | Two criteria of the spec contradict each other | Architecture: `ESCALATE`, blocked on `Spec` |
+| `coding-escalates-to-adr` | A task needs a file the ADR's list leaves out | Coding: `ESCALATE`, blocked on `ADR`, the file untouched |
+| `testing-reports-a-source-defect` | The code breaks a criterion | Testing: `DEFECTS`, blocked on `Source`, the code untouched |
+| `review-blocks-a-vacuous-test` | A test that can never fail | The review: `BLOCK`, blocked on `Tests` |
+| `team-lead-stops-at-a-failed-scan` | A review that passed over a failed scan | `team-lead` asks, and decides nothing |
+| `discovery-asks-before-it-writes` | A request no spec can be built on | Discovery asks, and writes no spec |
+
+The script stands in for the stages before the one under test, as the tool's own tests do: the case's files
+are their work, and each gets a handoff that says `DONE`. Then the one stage is dispatched like any other and
+runs for real, as its own agent type and under the guard, and the script reads its handoff and what the tool
+makes of it. A case is a folder with a `case.json`: the stage, the expected status and area, and under
+`files/` what that case alone lays over the project. Folders whose names start with `_` hold what several
+cases share. `--only <name>` runs one case. The six cases took under five minutes and cost $2.70 on the models
+the skills name, and $1.54 with `--stage-model sonnet`. Like a whole run, one pass of a case is one sample.
+
+What it costs, and what it does not show:
+
+- **Cost.** Every stage is a model run. Without an option, each skill runs on the model it names: one such
+  run took 34 minutes and cost $13.84 at API prices, with two routes back from a review on the way. With
+  `--stage-model sonnet` every skill runs on that one model instead: two such runs took 11 and 13 minutes and
+  cost $3.51 and $4.28. That tests the workflow, not the quality of a stage's work. `--budget` stops a run at
+  a sum, 25 USD unless you give another.
+- **One run is one sample.** The stages are model runs, so two runs differ. A pass shows that the workflow can
+  go through, not that it always does.
+- **What is left out.** The fast path and the trivial lane, the worktree workflow, a backward route unless a
+  stage causes one, the app's question dialog and task chips, and screenshots of a mock-up. The test project
+  says `Mock-up: none` and `in-place only`.
+- **Your own settings.** The run leaves your `~/.claude/settings.json` out, so a hook of yours does not fire
+  for it. Your `~/.claude/CLAUDE.md` still reaches every stage. The tool's record of approved scan lists in
+  `~/.claude` gets the test project's list during the run, and the script takes that entry out again.
 
 ## Adding a role
 

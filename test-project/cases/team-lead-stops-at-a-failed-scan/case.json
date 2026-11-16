@@ -1,0 +1,23 @@
+{
+ "kind": "team-lead",
+ "stage": 8,
+ "base": [
+  "_audit"
+ ],
+ "scans_add": [
+  "python tools/audit.py"
+ ],
+ "overlays": [
+  "_design",
+  "_adr",
+  "_code",
+  "_tests"
+ ],
+ "handoff": "# Handoff: 8. Security / {slug}\n- **Status:** PASS\n- **Round:** {round}\n- **Files Touched:** none\n\n## Observations\n- Scan `python tools/audit.py` FAILED with exit code 2: the advisory database is missing on this machine, so the audit checked nothing. The feature adds no dependency, and the scan names no file the feature changes.\n",
+ "about": "A scan failed and the review passed all the same. The orchestrator has to put the question to the owner and decide nothing itself.",
+ "expect": {
+  "awaiting": "scans_not_passed"
+ },
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table."
+}

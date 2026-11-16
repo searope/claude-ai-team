@@ -1,0 +1,9 @@
+{
+ "kind": "request",
+ "request": "Make the orders board better for our staff.",
+ "about": "The request says nothing a spec could be built on. Discovery has to ask the owner and write no spec yet.",
+ "expect": {
+  "discovery_open": true,
+  "spec_written": false
+ }
+}

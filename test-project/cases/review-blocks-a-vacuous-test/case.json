@@ -1,0 +1,18 @@
+{
+ "stage": 8,
+ "overlays": [
+  "_design",
+  "_adr",
+  "_code",
+  "_tests"
+ ],
+ "about": "Code and gates are fine, but the test named for AC-2 can never fail. The review has to block on Tests.",
+ "expect": {
+  "status": "BLOCK",
+  "blocked_on": [
+   "Tests"
+  ]
+ },
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table."
+}
