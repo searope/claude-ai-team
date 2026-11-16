@@ -1,5 +1,7 @@
 """Deterministic checks: the project's scans, run by ai_team.py before the reviews,
 and a proposal of gates and scans for a project that has none.
+
+A gate that is listed as a scan too is run here as well as by its stage.
 """
 
 from __future__ import annotations
@@ -188,7 +190,7 @@ def propose(root: str, project: Project) -> Dict[str, Any]:
 
     def scan(command: str, tool: str, fails_when: Optional[str] = None, link: Optional[str] = None) -> None:
         scans.append({"command": command, "fails_when": fails_when, "installed": _have(tool), "tool": tool,
-                      "link": link})
+                      "link": link, "gate": False})
 
     source_paths = [p.token.strip("/") for p in project.source] or ["src"]
     source_paths = [p for p in source_paths if os.path.isdir(os.path.join(root, p))] or ["."]
@@ -263,11 +265,26 @@ def propose(root: str, project: Project) -> Dict[str, Any]:
                      "`semgrep scan --error --quiet --config auto <paths>` can be added.")
 
     gates = {k: list(dict.fromkeys(v)) for k, v in gates.items() if v}
+    # Each gate is a scan as well, ahead of the others: then the tool runs it, and that it
+    # passed is not only the word of the stage that reports DONE.
+    gate_scans = []
+    for command in dict.fromkeys(c for cmds in gates.values() for c in cmds):
+        tool = command.split()[0]
+        gate_scans.append({"command": command, "fails_when": None, "installed": _have(tool), "tool": tool,
+                           "link": None, "gate": True})
+    scans[:0] = gate_scans
+    if gate_scans:
+        notes.append("The gates are listed under Scans as well. ai_team.py starts a scan through the system's "
+                     "shell (cmd.exe on Windows), and a stage runs its gate in its own: where one spelling does "
+                     "not run in both, such as a path to a program, write the scan the way that shell takes it. "
+                     "`doctor` matches the two whichever slash they use.")
     md = ["## Scans", "",
           "`ai_team.py` runs these once per round, before its first review, from the feature's folder, and "
           "gives the reviewers "
           "their output. A scan fails on a non-zero exit code, or when its output matches the pattern after "
-          "`fails when`.", ""]
+          "`fails when`. The gates are listed here as well, so that the tool runs them and not only the stage "
+          "that reports them. A review's `PASS` over a scan that failed or could not run waits for the user's "
+          "decision.", ""]
     for s in scans:
         line = f"- `{s['command']}`"
         if s["fails_when"]:
@@ -280,7 +297,8 @@ def propose(root: str, project: Project) -> Dict[str, Any]:
     missing = sorted({s["tool"] for s in scans if not s["installed"]})
     if missing:
         notes.append("Not installed here: " + ", ".join(missing) + ". A scan whose tool is missing is reported as "
-                     "COULD NOT RUN; install the tool or leave the scan out.")
+                     "COULD NOT RUN, and a review's PASS then waits for the user; install the tool or leave the "
+                     "scan out.")
     return {"ok": True, "stacks": stacks, "gates": gates, "scans": scans, "notes": notes,
             "markdown_sections": "\n".join(md),
             "markdown_gates": "\n".join(gate_lines) if gates else "",

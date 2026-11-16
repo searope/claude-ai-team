@@ -91,9 +91,22 @@ def cmd_doctor(args):
         for area in ("source", "tests", "infra"):
             if not getattr(proj, area):
                 warnings.append(f"Project Paths has no `{area.title()}` path in backticks")
+        unscanned = proj.unscanned_gates
+        facts["gates_not_scanned"] = unscanned
         if not proj.has_gates and not proj.scans:
             warnings.append("the project file sets no Gates and no Scans, so every check rests on the agents' "
                             "word: `propose-gates` prints a block to add")
+        elif unscanned:
+            warnings.append(f"no scan runs {len(unscanned)} of the project's gate commands ("
+                            + ", ".join(f"`{c}`" for c in unscanned) + "), so that they pass is the word of "
+                            "the stage that ran them. To have ai_team run one as well, before every review, add "
+                            "it to the project file's Scans section: a list item with the command in backticks, "
+                            "written the way the system's shell starts it")
+        elif proj.has_gates and not proj.scans:
+            warnings.append("the project file sets Gates but names no command that ai_team can read, and no "
+                            "Scans, so that the gates pass is the word of the stage that ran them: write each "
+                            "gate's command in backticks or in a code block, and add it to the Scans section as "
+                            "a list item as well")
     rules = os.path.join(SKILL_DIR, model.RULES_FILE_NAME)
     rules_text = projmod.read_text(rules) or ""
     m = re.search(r"Pipeline Version:\*\*\s*([\d.]+)", rules_text)
