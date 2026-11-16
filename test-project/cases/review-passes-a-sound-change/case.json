@@ -1,0 +1,16 @@
+{
+ "stage": 8,
+ "overlays": [
+  "_design",
+  "_adr",
+  "_code",
+  "_tests"
+ ],
+ "about": "The control for the two review cases: the same files with nothing planted, so the review has to pass. Without it, a review that blocks whatever it is given would pass both of them.",
+ "expect": {
+  "status": "PASS",
+  "then": "dispatch"
+ },
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table."
+}

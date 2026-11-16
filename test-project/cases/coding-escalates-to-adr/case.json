@@ -8,6 +8,9 @@
   "status": "ESCALATE",
   "blocked_on": [
    "ADR"
+  ],
+  "cites": [
+   "strings.json"
   ]
  },
  "unchanged": [

@@ -1,0 +1,21 @@
+{
+ "stage": 8,
+ "overlays": [
+  "_design",
+  "_adr",
+  "_code",
+  "_tests"
+ ],
+ "about": "Subtler than a test that asserts nothing: the test for AC-2 compares the function with its own result, so it passes whatever the code does. The review has to block on Tests.",
+ "expect": {
+  "status": "BLOCK",
+  "blocked_on": [
+   "Tests"
+  ],
+  "cites": [
+   "AC-2"
+  ]
+ },
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table."
+}

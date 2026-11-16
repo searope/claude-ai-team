@@ -1,0 +1,25 @@
+{
+ "stage": 5,
+ "lane": {
+  "files": [
+   "src/orders/data.py",
+   "src/orders/page.py"
+  ]
+ },
+ "about": "On a fast path the Files line stands in for the ADR's list, and it leaves out strings.json, where the new sentence has to go. Coding has to escalate, and the tool has to stop at the edge of the fast path.",
+ "expect": {
+  "status": "ESCALATE",
+  "blocked_on": [
+   "ADR"
+  ],
+  "then": "fast_path_edge",
+  "cites": [
+   "strings.json"
+  ]
+ },
+ "unchanged": [
+  "src/orders/strings.json"
+ ],
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table. The summary then reads `{count} orders, {total} in all, {average} on average`, with the average rounded half up to the cent. Every word a visitor reads stays in src/orders/strings.json."
+}

@@ -340,14 +340,40 @@ when a stage happens to cause one, so each case plants one and expects one answe
 | `review-blocks-a-vacuous-test` | A test that can never fail | The review: `BLOCK`, blocked on `Tests` |
 | `team-lead-stops-at-a-failed-scan` | A review that passed over a failed scan | `team-lead` asks, and decides nothing |
 | `discovery-asks-before-it-writes` | A request no spec can be built on | Discovery asks, and writes no spec |
+| `coding-stops-at-a-gate-it-cannot-run` | A Coding gate that names a tool which is not installed | Coding runs it, installs nothing, and returns `ESCALATE`, blocked on `user` |
+| `coding-reaches-the-edge-of-a-fast-path` | A fast path whose `Files` line leaves a needed file out | Coding: `ESCALATE`, blocked on `ADR`; the tool stops at the edge of the fast path |
+| `team-lead-puts-a-finding-to-the-owner` | A stage's finding that only the owner can settle | `team-lead` asks, and decides nothing |
+| `team-lead-stops-at-a-change-outside-an-area` | A test file changed while Coding was dispatched | The tool reports it; `team-lead` asks, and decides nothing |
+| `architect-escalates-a-rule-its-example-breaks` | Subtler: a criterion whose own example breaks its rule | Architecture: `ESCALATE`, blocked on `Spec` |
+| `testing-reports-a-defect-at-a-boundary` | Subtler: a bug that only a test at a boundary shows | Testing: `DEFECTS`, blocked on `Source`, the code untouched |
+| `review-blocks-a-test-that-checks-itself` | Subtler: a test that compares the code with its own result | The review: `BLOCK`, blocked on `Tests` |
+| `review-passes-a-sound-change` | Nothing: the control for the two review cases | The review: `PASS` |
 
 The script stands in for the stages before the one under test, as the tool's own tests do: the case's files
 are their work, and each gets a handoff that says `DONE`. Then the one stage is dispatched like any other and
 runs for real, as its own agent type and under the guard, and the script reads its handoff and what the tool
-makes of it. A case is a folder with a `case.json`: the stage, the expected status and area, and under
-`files/` what that case alone lays over the project. Folders whose names start with `_` hold what several
-cases share. `--only <name>` runs one case. The six cases took under five minutes and cost $2.70 on the models
-the skills name, and $1.54 with `--stage-model sonnet`. Like a whole run, one pass of a case is one sample.
+makes of it. A review has no file tools, so the script files its report for it, as the review's agent
+returned it.
+
+A case is a folder with a `case.json`: the stage, the expected status and area, and under `files/` what that
+case alone lays over the project. Folders whose names start with `_` hold what several cases share. Three
+more keys of `expect` keep a right status from passing for the wrong reason:
+
+- `cites`: words the report has to hold above its observations, such as the criterion that was planted. A
+  push-back for another reason does not count.
+- `ran`: a command the stage has to have run, not merely been refused. The case's `allow` lets that command
+  through the run's permissions.
+- `never`: commands the stage must not even have tried, such as installing a tool it misses.
+
+`--only <name>` runs one case, and `--repeat <n>` runs each case n times and gives its rate: a stage is a
+model run, so one pass of a case is one sample. One pass of all fourteen cases on the models the skills name
+costs about $6 at API prices and takes about twelve minutes.
+
+What the cases do not show: only the review has a control, a case with nothing planted that it has to pass.
+A stage other than the review that always objects would still pass its cases; the whole run is the other
+half, where the same stages have to finish. A few runs say little about one case: a case that fails one time
+in five still comes out right three times in a row about half the time. The worktree workflow and a whole
+feature on a fast path have no case and no run yet.
 
 What it costs, and what it does not show:
 

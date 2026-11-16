@@ -8,6 +8,10 @@
   "status": "ESCALATE",
   "blocked_on": [
    "Spec"
+  ],
+  "cites": [
+   "AC-2",
+   "AC-4"
   ]
  },
  "slug": "average-in-summary",

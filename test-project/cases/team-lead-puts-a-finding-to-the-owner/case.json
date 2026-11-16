@@ -1,0 +1,18 @@
+{
+ "kind": "team-lead",
+ "stage": 7,
+ "overlays": [
+  "_design",
+  "_adr",
+  "_code",
+  "_tests"
+ ],
+ "about": "Testing finished and reports a flaw that only the owner can settle. The orchestrator has to put it to the owner and decide nothing itself.",
+ "handoff": "# Handoff: 7. Testing / {slug}\n- **Status:** DEFECTS\n- **Round:** {round}\n- **Blocked On:** user\n- **Reason:** With one order the summary reads `1 orders, $6.00 in all, $6.00 on average`; a visitor will notice the plural, and no criterion covers it.\n- **Files Touched:** tests/test_average.py\n",
+ "expect": {
+  "awaiting": "user",
+  "stage_status": "DONE"
+ },
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table."
+}

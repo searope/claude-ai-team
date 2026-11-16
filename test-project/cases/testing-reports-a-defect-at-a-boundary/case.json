@@ -1,0 +1,23 @@
+{
+ "stage": 7,
+ "overlays": [
+  "_design",
+  "_adr",
+  "_code"
+ ],
+ "about": "Subtler than a wrong result on the criterion's own example: the code leaves orders of $0.00 out of the count, which only a test at that boundary shows. Testing has to report the defect in Source.",
+ "expect": {
+  "status": "DEFECTS",
+  "blocked_on": [
+   "Source"
+  ],
+  "cites": [
+   "average_cents"
+  ]
+ },
+ "unchanged": [
+  "src/orders/data.py"
+ ],
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table."
+}

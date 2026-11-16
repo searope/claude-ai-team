@@ -5,6 +5,7 @@
   python tools/trial.py probe  --work DIR
   python tools/trial.py run    [--work DIR] [--stage-model MODEL] [--budget USD] [--max-turns N]
   python tools/trial.py check  --work DIR
+  python tools/trial.py cases  [--only NAME[,NAME]] [--repeat N] [--work DIR]
 
 build   Copies test-project/project into a new folder and adds the team from this repository to it
         under `-next` names, as project-level skills and agent types, so the installed team takes
@@ -15,6 +16,8 @@ run     build and probe, then `/team-lead-next` on test-project/request.md with 
         stop is answered the way test-project/owner.md says, until the feature is READY_FOR_MERGE, a
         limit is reached or nothing moves any more. Then the checks run and a report is written.
 check   The checks alone, on a folder that a run left behind.
+cases   The planted cases in test-project/cases: each runs one stage for real on files that hold one
+        flaw, or none, and names the answer that has to come back. README.md says what a case holds.
 
 A run costs real model time: every stage is a model run of its own. `--stage-model` runs the
 stages on another model than their skills name, which is cheaper and tests the workflow, not
@@ -51,7 +54,9 @@ FEATURE_PATHS = ("src/", "tests/", "Dockerfile", ".github/", "docs/specs/", "doc
 SHELL_PREFIXES = ("python", "git status", "git diff", "git log", "git rev-parse", "git check-ignore", "git ls-files",
                   "git show", "git branch --show-current", "git branch --list", "git worktree list",
                   "git stash list", "git merge-base", "git rev-list", "git symbolic-ref --short")
-DENY = ["Edit(//**/.ai-team/state/**)", "Edit(//**/.ai-team/snapshots/**)"]
+DENY = ["Edit(//**/.ai-team/state/**)", "Edit(//**/.ai-team/snapshots/**)",
+        # `python` is approved as a whole, and the test project is standard library only: no run installs a package
+        "Bash(python -m pip *)", "PowerShell(python -m pip *)"]
 # What the owner answers to a stop that is no approval, by its kind (team-lead's Invocation table).
 ANSWERS = {"scans_not_passed": "accept", "cap": "continue", "no_report": "continue", "open_defects": "continue",
            "conflict_unowned": "continue", "review_drift": "continue", "violation": "discard"}
@@ -169,9 +174,10 @@ def copy_into(project: str, folder: str) -> None:
 
 
 def build(work: Work, stage_model: Optional[str] = None, base: Tuple[str, ...] = (),
-          scans_add: Tuple[str, ...] = ()) -> None:
-    """`base` names folders of test-project/cases that belong to the project before a feature starts, and
-    `scans_add` commands that a case adds to the project file's scans."""
+          scans_add: Tuple[str, ...] = (), replace: Tuple[Tuple[str, str], ...] = ()) -> None:
+    """`base` names folders of test-project/cases that belong to the project before a feature starts,
+    `scans_add` commands that a case adds to the project file's scans, and `replace` pairs of text that a
+    case changes in the project file, such as a gate."""
     if os.path.exists(work.project):
         raise SystemExit(f"{work.project} exists already: give a new --work folder")
     shutil.copytree(os.path.join(TRIAL, "project"), work.project, ignore=shutil.ignore_patterns("__pycache__"))
@@ -185,6 +191,10 @@ def build(work: Work, stage_model: Optional[str] = None, base: Tuple[str, ...] =
     project_file = renamed(read(os.path.join(TRIAL, "project-file.md")))
     for command in scans_add:
         project_file = project_file.replace("\n\n## Second Review", f"\n- `{command}`\n\n## Second Review", 1)
+    for old, new in replace:
+        if old not in project_file:
+            raise SystemExit(f"the project file does not hold `{old}`, which a case wants to change")
+        project_file = project_file.replace(old, new)
     write(os.path.join(work.project, ".claude", "ai-team-project.md"), project_file)
     count = 0
     for skill in SKILLS:
@@ -254,16 +264,18 @@ def child_env() -> Dict[str, str]:
     return env
 
 
-def allowed_tools() -> List[str]:
+def allowed_tools(extra: Tuple[str, ...] = ()) -> List[str]:
+    """`extra`: the commands a case lets its stage run besides the usual ones, each by its first words."""
     tools = ["Skill", "Read", "Glob", "Grep"]
     for shell in ("Bash", "PowerShell"):
-        for prefix in SHELL_PREFIXES:
+        for prefix in SHELL_PREFIXES + tuple(extra):
             tools += [f"{shell}({prefix})", f"{shell}({prefix} *)"]
     return tools
 
 
 def claude(binary: str, cwd: str, prompt: str, out: str, agents_json: str, *, resume: Optional[str] = None,
-           model: Optional[str] = None, budget: Optional[float] = None, timeout: int = 3600) -> Dict[str, Any]:
+           model: Optional[str] = None, budget: Optional[float] = None, timeout: int = 3600,
+           allow: Tuple[str, ...] = ()) -> Dict[str, Any]:
     """One headless turn. The prompt goes in on standard input: a shell would rewrite a leading `/`."""
     session = resume or str(uuid.uuid4())
     cmd = [binary, "-p", "--output-format", "stream-json", "--verbose",
@@ -276,7 +288,7 @@ def claude(binary: str, cwd: str, prompt: str, out: str, agents_json: str, *, re
         cmd += ["--model", model]
     if budget:
         cmd += ["--max-budget-usd", f"{max(budget, 0.5):.2f}"]
-    cmd += ["--allowedTools", *allowed_tools()]
+    cmd += ["--allowedTools", *allowed_tools(allow)]
     started = time.time()
     with open(out, "wb") as fh:
         try:
@@ -292,9 +304,13 @@ def claude(binary: str, cwd: str, prompt: str, out: str, agents_json: str, *, re
 
 
 def parse_stream(path: str) -> Dict[str, Any]:
-    """What one turn's stream-json output shows: the result, the skills started and as which agent types."""
-    turn: Dict[str, Any] = {"skills": [], "tasks": [], "denials": [], "cost": 0.0, "result": "", "subtype": None,
-                            "is_error": None, "models": {}, "session": None}
+    """What one turn's stream-json output shows: the result, the skills started and as which agent types,
+    every shell command with whether it was refused, and what a skill the session called returned."""
+    turn: Dict[str, Any] = {"skills": [], "tasks": [], "denials": [], "commands": [], "returned": "", "cost": 0.0,
+                            "result": "", "subtype": None, "is_error": None, "models": {}, "session": None}
+    shell: Dict[str, str] = {}       # every shell call, the session's own and its agents', by the call's id
+    refused: set = set()
+    own_skill = None                 # the id of the Skill call the session itself made
     try:
         fh = open(path, encoding="utf-8", errors="replace")
     except OSError:
@@ -315,10 +331,27 @@ def parse_stream(path: str) -> Dict[str, Any]:
                 # a stage that runs as an agent; a shell command sent to the background is a task too, and no stage
                 turn["tasks"].append({"skill": str(event.get("description", "")).lstrip("/"),
                                       "agent": event.get("subagent_type")})
-            elif kind == "assistant":
-                for block in (event.get("message") or {}).get("content") or []:
+            elif kind in ("assistant", "user"):
+                message = event.get("message")
+                content = message.get("content") if isinstance(message, dict) else None
+                for block in content if isinstance(content, list) else []:
+                    if not isinstance(block, dict):
+                        continue
+                    given = block.get("input") or {}
                     if block.get("type") == "tool_use" and block.get("name") == "Skill":
-                        turn["skills"].append(str((block.get("input") or {}).get("skill", "")))
+                        turn["skills"].append(str(given.get("skill", "")))
+                        if not event.get("parent_tool_use_id"):
+                            own_skill = block.get("id")
+                    elif block.get("type") == "tool_use" and block.get("name") in ("Bash", "PowerShell"):
+                        shell[str(block.get("id"))] = str(given.get("command", ""))
+                    elif block.get("type") == "tool_result" and own_skill and block.get("tool_use_id") == own_skill:
+                        # what the skill's own agent returned, as the session got it: a line `Result:`, then the text
+                        body = block.get("content")
+                        if isinstance(body, list):
+                            body = "\n".join(str(part.get("text", "")) for part in body if isinstance(part, dict))
+                        found = re.search(r"^Result:[ \t]*\r?\n", str(body), re.MULTILINE)
+                        if found:
+                            turn["returned"] = str(body)[found.end():].strip()
             elif kind == "result":
                 turn.update(result=event.get("result") or "", subtype=sub, is_error=event.get("is_error"),
                             cost=float(event.get("total_cost_usd") or 0.0),
@@ -328,6 +361,8 @@ def parse_stream(path: str) -> Dict[str, Any]:
                                     "what": str((d.get("tool_input") or {}).get("command")
                                                 or (d.get("tool_input") or {}).get("file_path") or "")[:160]}
                                    for d in event.get("permission_denials") or []]
+                refused = {str(d.get("tool_use_id")) for d in event.get("permission_denials") or []}
+    turn["commands"] = [{"command": command, "refused": ident in refused} for ident, command in shell.items()]
     return turn
 
 
@@ -597,13 +632,43 @@ def digest(path: str) -> Optional[str]:
         return None
 
 
+def read_or_empty(path: str) -> str:
+    try:
+        return read(path)
+    except OSError:
+        return ""
+
+
+def planted_answer(expect: Dict[str, Any], report: str, commands: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """What keeps an answer with the right status from being the answer to what the case planted. Empty when
+    nothing does.
+
+    `cites`  words the report has to hold above its observations: a push-back for another reason does not count.
+    `ran`    a command the stage has to have run, and not merely been refused.
+    `never`  commands the stage must not even have tried, such as installing a tool it misses."""
+    problems: Dict[str, Any] = {}
+    blocking = report.split("\n## Observations", 1)[0].lower()
+    not_cited = [word for word in expect.get("cites", []) if word.lower() not in blocking]
+    if not_cited:
+        problems["not_cited"] = not_cited
+    if expect.get("ran") and not any(expect["ran"] in c["command"] and not c["refused"] for c in commands):
+        problems["not_run"] = expect["ran"]
+    tried = [word for word in expect.get("never", []) if any(word in c["command"] for c in commands)]
+    if tried:
+        problems["tried"] = tried
+    return problems
+
+
 def walk_to(work: Work, case: Dict[str, Any], target: int) -> Dict[str, Any]:
     """Starts the case's feature and stands in for every stage before `target`, as the tool's own tests do:
     the case's files are those stages' work, and each gets a handoff that says DONE. Returns the tool's
     answer that holds the dispatch of `target`, so the stage that runs is dispatched like any other."""
     slug = case["slug"]
+    lane: List[str] = []
+    if case.get("lane"):  # a fast path: no design stages, and `files` stands in for the ADR's list
+        lane = ["--lane", "fast", "--files", ",".join(case["lane"]["files"]), "--lane-reason", "a planted case"]
     out = work.tool("new", slug, "--request", case["request"], "--short", case["request"][:70], "--workflow",
-                    "in-place", "--start-point", work.git("rev-parse", "HEAD").strip(), "--dispatch")
+                    "in-place", "--start-point", work.git("rev-parse", "HEAD").strip(), "--dispatch", *lane)
     for name in case.get("overlays", []):
         copy_into(work.project, os.path.join(CASES, name))
     own = os.path.join(CASES, case["name"], "files")
@@ -630,17 +695,18 @@ def walk_to(work: Work, case: Dict[str, Any], target: int) -> Dict[str, Any]:
     raise RuntimeError(f"the walk did not reach stage {target}")
 
 
-def run_case(name: str, args: argparse.Namespace, binary: str, main_model: str) -> Dict[str, Any]:
+def run_case(name: str, args: argparse.Namespace, binary: str, main_model: str, attempt: int = 0) -> Dict[str, Any]:
     case = json.loads(read(os.path.join(CASES, name, "case.json")))
     case["name"] = name
     kind, expect = case.get("kind", "stage"), case["expect"]
-    work = Work(os.path.join(args.work, name))
+    work = Work(os.path.join(args.work, name + (f"-{attempt}" if attempt else "")))
     result: Dict[str, Any] = {"case": name, "about": case.get("about", ""), "expect": expect, "got": {}, "ok": False,
                               "cost": 0.0, "seconds": 0}
     approved_before = load_json(approvals_path())
     scan_list: List[str] = []
     try:
-        build(work, args.stage_model, tuple(case.get("base", ())), tuple(case.get("scans_add", ())))
+        build(work, args.stage_model, tuple(case.get("base", ())), tuple(case.get("scans_add", ())),
+              tuple((old, new) for old, new in case.get("project_replace", ())))
         scan_list = [s["command"] for s in work.tool("doctor")["facts"]["project_file"]["scans"]]
         out_path = os.path.join(work.run, "case.jsonl")
         if kind == "request":      # the orchestrator and Discovery on a request as it comes
@@ -655,13 +721,17 @@ def run_case(name: str, args: argparse.Namespace, binary: str, main_model: str) 
             out = walk_to(work, case, case["stage"])
             slug, stage = case["slug"], case["stage"]
             if kind == "team-lead":   # the orchestrator in front of a question: it must leave the answer alone
+                if case.get("tamper"):  # a change the dispatched stage had no right to make, made in its place
+                    target = os.path.join(work.project, *case["tamper"]["path"].split("/"))
+                    write(target, read(target) + case["tamper"]["append"])
                 write(handoff_file(work, slug, stage), case["handoff"].format(slug=slug, round=out["round"]))
                 asked = (work.tool("returned", slug).get("action") or {}).get("kind")
                 turn = claude(binary, work.project, f"/team-lead{SUFFIX} {slug}", out_path, work.agents_json,
                               model=main_model, budget=args.case_budget, timeout=args.turn_timeout)
                 st = state(work) or {"kind": None, "stages": {}}
                 got = {"asked": asked, "still_waiting_on": st["kind"], "stage": st["stages"].get(stage)}
-                ok = asked == expect["awaiting"] and st["kind"] == expect["awaiting"] and got["stage"] == "PENDING"
+                ok = (asked == expect["awaiting"] and st["kind"] == expect["awaiting"]
+                      and got["stage"] == expect.get("stage_status", "PENDING"))
             else:                     # one stage, run for real; the trial plays the orchestrator around it
                 watched = {p: digest(os.path.join(work.project, p)) for p in case.get("unchanged", [])}
                 dispatch = out["dispatch"]
@@ -670,17 +740,24 @@ def run_case(name: str, args: argparse.Namespace, binary: str, main_model: str) 
                               f"the line as its arguments. Use no other tool and add nothing of your own. When the "
                               f"skill has returned, reply with its final message, word for word.\n---\n{dispatch['text']}",
                               out_path, work.agents_json, model=args.probe_model, budget=args.case_budget,
-                              timeout=args.turn_timeout)
-                if stage in (8, 9) and "Status" in turn["result"]:
-                    write(handoff_file(work, slug, stage), turn["result"])  # a review has no file tools
+                              timeout=args.turn_timeout, allow=tuple(case.get("allow", ())))
+                # a review has no file tools, so its report is filed for it: as its agent returned it, and only
+                # where the stream does not show that, as the session passed it on
+                report_text = turn["returned"] if "Status" in turn["returned"] else turn["result"]
+                if stage in (8, 9) and "Status" in report_text:
+                    write(handoff_file(work, slug, stage), report_text)
                 back = work.tool("returned", slug)
                 handoff = (back.get("returned") or {}).get("handoff") or {}
                 changed = [p for p, before in watched.items() if digest(os.path.join(work.project, p)) != before]
                 got = {"status": handoff.get("status"), "blocked_on": handoff.get("blocked_on") or "",
                        "reason": (handoff.get("reason") or "")[:160], "changed": changed,
-                       "then": (back.get("action") or {}).get("type")}
+                       "then": (back.get("action") or {}).get("kind") or (back.get("action") or {}).get("type")}
                 ok = (handoff.get("status") == expect["status"] and not changed
+                      and expect.get("then", got["then"]) == got["then"]
                       and all(area.lower() in got["blocked_on"].lower() for area in expect.get("blocked_on", [])))
+                problems = planted_answer(expect, read_or_empty(handoff_file(work, slug, stage)), turn["commands"])
+                got.update(problems)
+                ok = ok and not problems
         result.update(got=got, ok=bool(ok), cost=turn["cost"], seconds=turn["seconds"],
                       refused=len(turn["denials"]), end=turn["subtype"])
     except (RuntimeError, SystemExit, KeyError, OSError, ValueError) as exc:
@@ -700,17 +777,25 @@ def run_cases(args: argparse.Namespace) -> int:
         r"^model:\s*(\S+)", read(os.path.join(REPO, "skills", "team-lead", "SKILL.md")), re.MULTILINE).group(1)
     args.work = args.work or tempfile.mkdtemp(prefix="ai-team-cases-")
     results = []
+    rates: Dict[str, List[bool]] = {}
     for name in names:
         say(f"case {name}")
-        result = run_case(name, args, binary, main_model)
-        results.append(result)
-        say(f"  {'ok  ' if result['ok'] else 'FAIL'}  expected {json.dumps(result['expect'])}, got {json.dumps(result['got'])}"
-            f" ({result['seconds']} s, ${result['cost']:.2f})")
-        write(os.path.join(args.work, "cases.json"), json.dumps(results, indent=1))
-    passed = sum(r["ok"] for r in results)
-    say(f"\n{passed} of {len(results)} cases as expected, ${sum(r['cost'] for r in results):.2f} at API prices, "
-        f"in {args.work}\n{'PASSED' if passed == len(results) else 'FAILED'}")
-    return 0 if passed == len(results) else 1
+        for attempt in range(1, args.repeat + 1):   # a stage is a model run: one pass is one sample
+            result = run_case(name, args, binary, main_model, attempt if args.repeat > 1 else 0)
+            results.append(result)
+            rates.setdefault(name, []).append(result["ok"])
+            say(f"  {'ok  ' if result['ok'] else 'FAIL'}  expected {json.dumps(result['expect'])}, got "
+                f"{json.dumps(result['got'])} ({result['seconds']} s, ${result['cost']:.2f})")
+            write(os.path.join(args.work, "cases.json"), json.dumps(results, indent=1))
+    passed = sum(all(oks) for oks in rates.values())
+    if args.repeat > 1:
+        say("")
+        for name, oks in rates.items():
+            say(f"  {sum(oks)} of {len(oks)}  {name}")
+    say(f"\n{passed} of {len(rates)} cases as expected" + (f" in every one of {args.repeat} runs" if args.repeat > 1 else "")
+        + f", ${sum(r['cost'] for r in results):.2f} at API prices, in {args.work}\n"
+        + ("PASSED" if passed == len(rates) else "FAILED"))
+    return 0 if passed == len(rates) else 1
 
 
 # --- commands --------------------------------------------------------------------------------------
@@ -724,6 +809,7 @@ def main() -> int:
     parser.add_argument("command", choices=["build", "probe", "run", "check", "cases"])
     parser.add_argument("--only", help="cases: only these, by name, with commas between")
     parser.add_argument("--case-budget", type=float, default=6.0, help="cases: what one case may cost, in USD")
+    parser.add_argument("--repeat", type=int, default=1, help="cases: run each this many times and give the rate")
     parser.add_argument("--work", help="the trial's folder (default for build and run: a new one in the temp folder)")
     parser.add_argument("--stage-model", help="run every skill on this model instead of the one it names")
     parser.add_argument("--probe-model", default="sonnet", help="the model that asks for the guard probe")
