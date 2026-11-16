@@ -920,6 +920,35 @@ GATES = """- **Gates:**
 - **Stage Notes:** 5. Coding keeps `src/legacy.py` as it is.
 """
 
+# gates as a project may write them instead: a heading, a shorthand defined in words, code blocks
+HEADING_GATES = """### Gates
+Python runs through the project's own interpreter,
+`D:/proj/.venv/Scripts/python`, written `py` below.
+
+Testing is done when these pass:
+
+```bash
+py -m unittest discover -s tests
+node --test web/app.test.mjs
+```
+
+Coding runs less:
+
+```bash
+# the quick ones
+py -m unittest discover -s tests -p "test_quick_*.py"
+```
+
+- A path in this text, such as `tests/data/`, is no command.
+
+### Stage Notes
+- **7. Testing:** the code block below belongs to this part, not to the gates.
+
+```bash
+py -m not_a_gate
+```
+"""
+
 
 class ChecksTests(unittest.TestCase):
     def setUp(self):
@@ -1131,7 +1160,31 @@ class ChecksTests(unittest.TestCase):
         r = Repo(PROJECT.replace("- None.\n", "- **Gates:** 7. Testing: the whole test suite passes.\n"))
         try:
             out = r.cli("doctor", expect_ok=False)
-            self.assertTrue(any("no command in backticks" in w for w in out["warnings"]))
+            self.assertTrue(any("names no command that ai_team can read" in w for w in out["warnings"]))
+        finally:
+            r.close()
+
+    def test_doctor_reads_gates_written_under_a_heading_in_code_blocks(self):
+        gated = PROJECT.replace("- None.\n", HEADING_GATES)
+        r = Repo(gated)
+        try:
+            out = r.cli("doctor", expect_ok=False)
+            self.assertTrue(out["facts"]["project_file"]["gates"])
+            self.assertEqual(out["facts"]["gates_not_scanned"],
+                             ["py -m unittest discover -s tests", "node --test web/app.test.mjs",
+                              'py -m unittest discover -s tests -p "test_quick_*.py"'])
+            self.assertFalse(any("no Gates and no Scans" in w for w in out["warnings"]))
+            self.assertTrue(any("no scan runs 3 of the project's gate commands" in w for w in out["warnings"]))
+            # the scans name the interpreter by its path where the gates use the project's shorthand for it
+            r.write(".claude/ai-team-project.md", gated.replace(
+                "## Overrides for this project",
+                "## Scans\n\n- `D:/proj/.venv/Scripts/python -m unittest discover -s tests`\n"
+                "- `node --test web/app.test.mjs`\n"
+                "- `D:\\proj\\.venv\\Scripts\\python -m unittest discover -s tests -p \"test_quick_*.py\"`\n\n"
+                "## Overrides for this project"))
+            out = r.cli("doctor", expect_ok=False)
+            self.assertEqual(out["facts"]["gates_not_scanned"], [])
+            self.assertFalse(any("no scan runs" in w for w in out["warnings"]))
         finally:
             r.close()
 
@@ -1412,6 +1465,14 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(projmod._gate_commands("- None."), [])
         self.assertEqual(projmod.norm_command(".venv\\Scripts\\python   -m pytest"),
                          projmod.norm_command(".venv/Scripts/python -m pytest"))
+
+    def test_a_scan_runs_a_gate_through_another_program_only_when_the_arguments_agree(self):
+        self.assertTrue(projmod.same_check("py -m unittest discover -s tests",
+                                           "D:/proj/.venv/Scripts/python -m unittest discover -s tests"))
+        self.assertTrue(projmod.same_check("ruff check .", "ruff  check ."))
+        self.assertFalse(projmod.same_check("pytest -q", "pip-audit -q"))  # one argument is too little to go by
+        self.assertFalse(projmod.same_check("py -m unittest discover -s tests", "py -m unittest discover -s other"))
+        self.assertFalse(projmod.same_check("make", "nmake"))
 
 
 if __name__ == "__main__":

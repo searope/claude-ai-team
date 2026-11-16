@@ -270,10 +270,11 @@ Do this on every run.
    `Pipeline Version` 8.1, the version this skill is written for.
 2. Run `ai_team doctor` once per session. Tell the user each warning in plain
    words; a missing project file is the first run, below. When it says the
-   project sets no Gates and no Scans, or that no scan runs its gates, run
-   `ai_team propose-gates` and show the user its blocks with what each check
-   does, and that they paste them into the project file (`where` says where);
-   you never rewrite that file yourself.
+   project sets no Gates and no Scans, run `ai_team propose-gates` and show the
+   user its blocks with what each check does, and that they paste them into
+   the project file (`where` says where). When it says that no scan runs some
+   of the project's gates, show the user the list item to add under `Scans`
+   for each command it names. You never rewrite that file yourself.
 3. Check git: `git rev-parse --is-inside-work-tree`, and note whether
    `git status --porcelain` is empty. If the project is not a repository, tell
    the user and run `git init`.

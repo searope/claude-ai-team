@@ -108,6 +108,17 @@ def norm_command(command: str) -> str:
     return " ".join(command.replace("\\", "/").split())
 
 
+def same_check(gate: str, scan: str) -> bool:
+    """A scan runs a gate when it is the same command, or the same arguments through another program.
+
+    A project may write its gates with a shorthand it defines in words, such as `py` for the
+    interpreter of its environment, and the scan with that interpreter's full path. Two or more
+    arguments have to agree, so that `pytest -q` is not taken for `pip-audit -q`.
+    """
+    g, s = norm_command(gate).split(), norm_command(scan).split()
+    return g == s or (len(g) >= 3 and g[1:] == s[1:])
+
+
 @dataclass
 class Project:
     root: str
@@ -128,13 +139,15 @@ class Project:
 
     @property
     def has_gates(self) -> bool:
-        return bool(re.search(r"\*\*Gates:?\*\*", self.overrides or ""))
+        """The overrides set gates: under a `**Gates:**` label, or under a heading named Gates."""
+        text = self.overrides or ""
+        return bool(re.search(r"\*\*Gates:?\*\*", text)
+                    or any(_GATES_HEADING.match(line) for line in text.splitlines()))
 
     @property
     def unscanned_gates(self) -> List[str]:
         """The gate commands that no scan runs: that these pass is the word of the stage that ran them."""
-        scanned = {norm_command(s.command) for s in self.scans}
-        return [c for c in self.gate_commands if norm_command(c) not in scanned]
+        return [c for c in self.gate_commands if not any(same_check(c, s.command) for s in self.scans)]
 
     def area_of(self, rel: str, slug: Optional[str] = None) -> Optional[str]:
         """The area a project-relative path lies in, or None."""
@@ -223,14 +236,13 @@ def _scans(text: str) -> List[Scan]:
 
 
 _GATES_LABEL = re.compile(r"^(?P<indent>\s*)(?:[-*+]\s+)?\*\*Gates:?\*\*")
+_GATES_HEADING = re.compile(r"^\s{0,3}(?P<level>#{2,6})\s+Gates\s*$", re.IGNORECASE)
+_HEADING = re.compile(r"^\s{0,3}(?P<level>#{1,6})\s+\S")
+_FENCE = re.compile(r"^\s*(?P<mark>`{3,}|~{3,})")
 
 
-def _gate_commands(overrides: str) -> List[str]:
-    """What stands in backticks under the `Gates` override: the commands the stages run.
-
-    The override is the line of the `**Gates:**` label and the lines indented under it.
-    """
-    lines = (overrides or "").splitlines()
+def _label_gate_commands(lines: List[str]) -> List[str]:
+    """The line of the `**Gates:**` label and the lines indented under it: what stands in backticks."""
     for idx, line in enumerate(lines):
         m = _GATES_LABEL.match(line)
         if not m:
@@ -242,9 +254,52 @@ def _gate_commands(overrides: str) -> List[str]:
             if text.strip() and len(text) - len(text.lstrip()) <= indent:
                 break  # the next override, or text after the block
             block.append(nxt)
-        found = re.findall(r"`([^`]+)`", "\n".join(block))
-        return list(dict.fromkeys(c.strip() for c in found if c.strip()))
+        return re.findall(r"`([^`]+)`", "\n".join(block))
     return []
+
+
+def _heading_gate_commands(lines: List[str]) -> List[str]:
+    """A part headed `Gates`, up to the next heading of its level: the lines of its code blocks.
+
+    A project that writes its gates this way puts paths and other names in backticks in the
+    text around them, so only a part with no code block is read by its backticks.
+    """
+    for idx, line in enumerate(lines):
+        m = _GATES_HEADING.match(line)
+        if not m:
+            continue
+        level = len(m.group("level"))
+        text: List[str] = []
+        fenced: List[str] = []
+        fence = ""
+        for nxt in lines[idx + 1:]:
+            mark = _FENCE.match(nxt)
+            if fence:
+                if mark and nxt.strip() == mark.group("mark") and mark.group("mark").startswith(fence):
+                    fence = ""
+                elif nxt.strip() and not nxt.lstrip().startswith("#"):
+                    fenced.append(nxt.strip())
+                continue
+            if mark:
+                fence = mark.group("mark")
+                continue
+            heading = _HEADING.match(nxt)
+            if heading and len(heading.group("level")) <= level:
+                break
+            text.append(nxt)
+        return fenced or re.findall(r"`([^`]+)`", "\n".join(text))
+    return []
+
+
+def _gate_commands(overrides: str) -> List[str]:
+    """The commands of the `Gates` override, which the stages run.
+
+    The override is written in one of two ways: a `**Gates:**` label with the commands in
+    backticks on the lines under it, or a heading named Gates with the commands in code blocks.
+    """
+    lines = (overrides or "").splitlines()
+    found = _label_gate_commands(lines) + _heading_gate_commands(lines)
+    return list(dict.fromkeys(c.strip() for c in found if c.strip()))
 
 
 def _yes_no(value: str) -> Optional[bool]:
