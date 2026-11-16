@@ -1,0 +1,15 @@
+{
+ "stage": 4,
+ "overlays": [
+  "_design"
+ ],
+ "about": "The spec contradicts itself on rounding. Architecture cannot write an ADR that meets both criteria and has to send the spec back.",
+ "expect": {
+  "status": "ESCALATE",
+  "blocked_on": [
+   "Spec"
+  ]
+ },
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table."
+}

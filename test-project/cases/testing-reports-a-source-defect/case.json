@@ -1,0 +1,20 @@
+{
+ "stage": 7,
+ "overlays": [
+  "_design",
+  "_adr",
+  "_code"
+ ],
+ "about": "The code cuts the average off, where AC-2 wants it rounded half up. Testing has to report the defect in Source and leave the code alone.",
+ "expect": {
+  "status": "DEFECTS",
+  "blocked_on": [
+   "Source"
+  ]
+ },
+ "unchanged": [
+  "src/orders/data.py"
+ ],
+ "slug": "average-in-summary",
+ "request": "Show the average order total in the summary line under the orders table."
+}

@@ -1,0 +1,9 @@
+{
+  "page.title": "Orders",
+  "table.id": "Order",
+  "table.customer": "Customer",
+  "table.items": "Items",
+  "table.total": "Total",
+  "table.empty": "No orders yet.",
+  "summary.total": "{count} orders, {total} in all, {average} on average"
+}

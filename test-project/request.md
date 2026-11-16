@@ -1,0 +1,1 @@
+Add an "Export CSV" button to the orders board. It downloads the orders the page lists as a CSV file. A new setting, EXPORT_MAX_ROWS, caps how many orders one export holds; its default is 1000, and the deployment has to provide it. When there are more orders than the cap, the page tells the visitor how many the export leaves out.

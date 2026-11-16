@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}}</title>
+  <link rel="stylesheet" href="/static/site.css">
+</head>
+<body>
+  <main>
+    <header class="board-head">
+      <h1>{{title}}</h1>
+    </header>
+    <table class="orders">
+      <thead>
+        <tr><th scope="col">{{col_id}}</th><th scope="col">{{col_customer}}</th><th scope="col" class="num">{{col_items}}</th><th scope="col" class="num">{{col_total}}</th></tr>
+      </thead>
+      <tbody>
+{{rows}}
+      </tbody>
+    </table>
+    <p class="summary">{{summary}}</p>
+  </main>
+</body>
+</html>
